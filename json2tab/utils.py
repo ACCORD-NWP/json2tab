@@ -8,7 +8,7 @@ from .logs import logger
 
 
 def print_processing_status(
-    idx: int,
+    counter: int,
     total: int,
     label: str = "Processing turbines",
     step: int = 10,
@@ -17,7 +17,7 @@ def print_processing_status(
     """Print status during processing of items (i.e. turbines).
 
     Args:
-        idx (int):        Index of current item processing
+        counter (int):    Counter of current item processing
         total (int):      Total number of items to process
         label (str):      Label used to describe activity
         step (int):       Print output for each step-increment in percentage
@@ -26,11 +26,11 @@ def print_processing_status(
     """
     with contextlib.suppress(Exception):
         if total > thresshold:
-            percent_prev = float(idx - 1) / total
-            percent = float(idx) / total
+            percent_prev = float(counter - 1) / total
+            percent = float(counter) / total
 
             if int(percent_prev * step) != int(percent * step):
-                msg = f"{label}: {idx} out of {total} " f"({int(percent*100)}%)"
+                msg = f"{label}: {counter} out of {total} " f"({int(percent*100)}%)"
                 logger.log(logger.getEffectiveLevel(), f"[STATUS] {msg}")
 
 
@@ -73,6 +73,12 @@ def zero_to_none(data: float) -> float:
     """
     if data is None:
         return data
+    
+    try:
+        if not isinstance(data, float):
+            data = float(data)
+    except (ValueError, TypeError):
+        data = None
 
     return None if data == 0 else data
 

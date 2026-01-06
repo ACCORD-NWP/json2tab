@@ -69,7 +69,7 @@ def ensure_manufacturer_prefix(model_name: str) -> str:
         (r"^N(-|\s)?\d+", "Nordex"),
         (r"^V(-|\s)?\d{2,3}", "Vestas"),
         (r"^(W|WW)(-|\s)?\d{2,4}", "Wind World"),
-        (r"^(S|GW|GWH)(-|\s)?\d+", "Goldwind"),
+        (r"^(GW|GWH)(-|\s)?\d+", "Goldwind"),
     ]
 
     # Try each pattern in order

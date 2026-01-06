@@ -64,6 +64,8 @@ def read_locationdata_from_txt_as_dataframe(input_filename: str) -> pd.DataFrame
                 "country",
             ],
         )
+        
+        data["wf101_type"] = "FO_" + data["wf101_type"].astype(str)
 
         if "source" not in data.columns:
             _, data["source"] = os.path.split(input_filename)
@@ -92,6 +94,7 @@ def read_locationdata_from_tab_as_dataframe(input_filename: str) -> pd.DataFrame
         knmi_cols = ["lon", "lat", "type", "r", "z"]
         if len(data.columns) == len(knmi_cols):
             data.columns = knmi_cols
+            data["type"] = f"KN_{int(data['type'])}"
 
         if "source" not in data.columns:
             _, data["source"] = os.path.split(input_filename)

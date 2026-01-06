@@ -3,6 +3,7 @@
 from typing import List, Optional
 
 from ..location_converters.convert_between_csv_geojson import convert_between_csv_geojson
+from ..location_converters.country_data.austria import austria
 from ..location_converters.country_data.denmark import denmark
 from ..location_converters.country_data.finland import finland
 from ..location_converters.country_data.flanders import flanders
@@ -34,6 +35,7 @@ supported_conversion_types: List[str] = sorted(
         "txt_to_csv",
         "csv2csv",
         "csv_to_csv",
+        "austria",
         "denmark",
         "finland",
         "flanders",
@@ -99,6 +101,9 @@ def converter(
 
             elif convert_type in ["csv2csv", "csv_to_csv"]:
                 csv_to_csv(input_filename, output_filename)
+
+            elif convert_type == "austria":
+                austria(input_filename, output_filename)
 
             elif convert_type == "denmark":
                 denmark(input_filename, output_filename)

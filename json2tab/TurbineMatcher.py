@@ -45,7 +45,6 @@ class TurbineMatcher:
             model_designation_key (str):  (Optional) column name for model_designation
             matched_line_index_key (str): (Optional) column name for matched_line_index
         """
-        self.config = config
 
         self.turbine_location_manager = turbine_location_manager
         self.turbine_type_manager = turbine_type_manager
@@ -62,15 +61,26 @@ class TurbineMatcher:
 
         self.match_cache = {}
 
+        self.output_dir = Path(config["output"]["directory"])
+
         try:
-            self.forbidden_types = self.config["output"]["tab_format"]["location"][
-                "forbidden_types"
-            ]
+            self.forbidden_types = config["matcher"]["forbidden_types"]
         except (KeyError, ValueError, TypeError):
             self.forbidden_types = []
 
         if isinstance(self.forbidden_types, str):
             self.forbidden_types = self.forbidden_types.split(";")
+
+        try:
+            self.use_probabilistic_mapper = config["matcher"]["use_probabilistic_mapper"]
+        except (KeyError, ValueError, TypeError):
+            self.use_probabilistic_mapper = True
+
+        try:
+            self.use_default_selector = config["matcher"]["use_default_selector"]
+        except (KeyError, ValueError, TypeError):
+            self.use_default_selector = True
+
 
     def _turbine_type_to_model_designation(
         self, turbine_type: str
@@ -80,7 +90,7 @@ class TurbineMatcher:
 
             logger.debug(
                 f"Model designation for turbine_type='{turbine_type}' is set to "
-                f"already known '{model_designation}'."
+                f"already cached '{model_designation}'."
             )
 
             return model_designation, matched_line_index
@@ -96,7 +106,7 @@ class TurbineMatcher:
         )
 
         if model_designation:
-            logger.info(
+            logger.debug(
                 f"Model designation for turbine_type={turbine_type} is set to "
                 f"'{model_designation}' (match found in dataframe on "
                 f"index={matched_line_index})."
@@ -198,8 +208,9 @@ class TurbineMatcher:
             self.matched_line_index_key = f"matched_line_index{self.suffix}"
 
         # Add columns to DataFrame to store matched model_designation / specs
+        no_match_idx = -1
         turbines[self.model_designation_key] = None
-        turbines[self.matched_line_index_key] = -1
+        turbines[self.matched_line_index_key] = no_match_idx
 
         # Setup cache for quick store of found matches
         self.match_cache = {}
@@ -212,10 +223,12 @@ class TurbineMatcher:
         logger.info(f"Start matching types to {total_turbines} turbine locations")
 
         # Map all unique turbine types to known model designations.
+        turbine_counter = 0
         for idx, turbine in turbines.iterrows():
+            turbine_counter += 1
             try:
                 print_processing_status(
-                    idx, total_turbines, "Matching turbines with model designations"
+                    turbine_counter, total_turbines, "Matching turbines with model designations"
                 )
 
                 (
@@ -229,15 +242,16 @@ class TurbineMatcher:
                 )
                 sources = [turbine, type_props]
                 radius = get_radius(sources)
+                diameter = 2 * radius if radius is not None else 0
                 height = get_height(sources)
                 rated_power = get_rated_power_kw(sources)
 
                 turbines.loc[idx, "radius"] = radius
-                turbines.loc[idx, "diameter"] = 2 * radius
+                turbines.loc[idx, "diameter"] = diameter
                 turbines.loc[idx, "power_rating"] = rated_power
                 turbines.loc[idx, "hub_height"] = height
                 turbines.loc[idx, self.model_designation_key] = model_designation
-                turbines.loc[idx, self.matched_line_index_key] = matched_line_index
+                turbines.loc[idx, self.matched_line_index_key] = matched_line_index or no_match_idx
 
                 country = turbine.get("country")
                 if country not in counter_per_country:
@@ -284,7 +298,6 @@ class TurbineMatcher:
 
         percent_per_country = {"Matcher": known_matchers, "Total (%)": []}
 
-        output_dir = Path(self.config["output"]["directory"])
 
         counter_per_country["Total"] = counter_global
         for country, counter in counter_per_country.items():
@@ -320,7 +333,7 @@ class TurbineMatcher:
             )
 
             with contextlib.suppress(Exception), open(
-                output_dir / f"matching_summary_{country}.txt", "w"
+                self.output_dir / f"matching_summary_{country}.txt", "w"
             ) as file:
                 file.write(matching_summary)
 
@@ -339,12 +352,12 @@ class TurbineMatcher:
         print(f"\n{matching_summary}")
 
         with contextlib.suppress(Exception):
-            with open(output_dir / "matching_summary.txt", "w") as file:
+            with open(self.output_dir / "matching_summary.txt", "w") as file:
                 file.write(matching_summary)
 
             hits = pd.DataFrame(data=hits_per_country)
             hits = hits.sort_values(by=["Total"], ascending=False)
-            hits.to_csv(output_dir / "matching_summary.csv", index=False)
+            hits.to_csv(self.output_dir / "matching_summary.csv", index=False)
 
     def match_model_designation_on_turbine(self, turbine) -> Tuple[str, int, str]:
         """Gets the model_designation for a given turbine tower.
@@ -362,6 +375,8 @@ class TurbineMatcher:
 
         lon = turbine.get("longitude")
         lat = turbine.get("latitude")
+        country = turbine.get("country")
+        is_offshore = turbine.get("is_offshore")
 
         diameter = zero_to_none(turbine.get("diameter"))
         height = zero_to_none(turbine.get("hub_height"))
@@ -401,12 +416,13 @@ class TurbineMatcher:
             # Basic checks faild, don't trust this extended type for this turbine.
             extended_type = None
 
-        logger.debug(
-            f"Process turbine N{lat}, E{lon} with "
-            f"manufacturer='{manufacturer}', turbine_type='{turbine_type}', "
-            f"extended_type='{extended_type}'; "
-            f"(diameter={diameter}, height={height}, power={power})"
+        tag_str = f"N{lat}, E{lon} ({country}, {'off' if is_offshore else 'on'}shore)"
+        props = (f"manufacturer='{manufacturer}', turbine_type='{turbine_type}', "
+                f"extended_type='{extended_type}'; "
+                f"(diameter={diameter}, height={height}, power={power})"
         )
+        
+        logger.debug(f"Process turbine {tag_str} with {props}")
 
         if turbine_type is not None:
             # [Option 3]: Extended turbine_type-based model_designation detection
@@ -424,9 +440,9 @@ class TurbineMatcher:
                 ):
                     # Found realistic match
                     logger.info(
-                        f"Model designation for turbine_type={extended_type} "
-                        f"(from {turbine_type}) is set to '{model_designation}' by "
-                        "ModelDesignationDeriver (by manufacturer+turbine_type) "
+                        f"Model designation is set to '{model_designation}' "
+                        f"(via turbine_type='{extended_type}'; from '{turbine_type}') "
+                        "by ModelDesignationDeriver (by manufacturer+turbine_type) "
                         f"(match found in dataframe on index={matched_line_index})."
                     )
 
@@ -455,10 +471,10 @@ class TurbineMatcher:
             ):
                 # Found realistic match
                 logger.info(
-                    f"Model designation for turbine_type={turbine_type} "
-                    f"is set to '{model_designation}' by ModelDesignationDeriver "
-                    "(by turbine_type) (match found in dataframe on "
-                    f"index={matched_line_index})."
+                    f"Model designation is set to '{model_designation}' "
+                    f"(from turbine_type={turbine_type}) "
+                    f"by ModelDesignationDeriver (by turbine_type) "
+                    f"(match found in dataframe on index={matched_line_index})."
                 )
 
                 self.add_to_cache(turbine_type, model_designation, matched_line_index)
@@ -479,8 +495,9 @@ class TurbineMatcher:
             if model_designation:
                 logger.info(
                     f"Model designation is set to '{model_designation}' "
-                    f"(via guessed turbine_type='{turbine_type_guess}') based on "
-                    f"DimensionLocationMapper."
+                    f"(via turbine_type='{turbine_type_guess}') "
+                    f"based on DimensionLocationMapper "
+                    f"(match found in dataframe on index={matched_line_index})."
                 )
 
                 self.add_to_cache(
@@ -504,9 +521,9 @@ class TurbineMatcher:
                     logger.info(
                         f"Model designation for tower with "
                         f"diameter={diameter}, height={height}, power={power} "
-                        f"is set to '{model_designation}' by TurbineTypeManager "
-                        "(by tower properties) (match found in dataframe "
-                        f"on index={matched_line_index})."
+                        f"is set to '{model_designation}' "
+                        "by TurbineTypeManager (by tower properties) "
+                        f"(match found in dataframe on index={matched_line_index})."
                     )
                     return (
                         model_designation,
@@ -515,47 +532,51 @@ class TurbineMatcher:
                     )
 
         # [Option 7]: Use the probabilistic mapper as fallback
-        turbine_type_probabilistically = self.probabilistic_mapper.map(
-            turbine_type, lat, lon, diameter
-        )
-        if turbine_type_probabilistically:
-            (
-                model_designation,
-                matched_line_index,
-            ) = self._turbine_type_to_model_designation(turbine_type_probabilistically)
+        if self.use_probabilistic_mapper:
+            turbine_type_probabilistically = self.probabilistic_mapper.map(
+                turbine_type, lat, lon, diameter
+            )
+            if turbine_type_probabilistically:
+                (
+                    model_designation,
+                    matched_line_index,
+                ) = self._turbine_type_to_model_designation(turbine_type_probabilistically)
 
-            if model_designation:
-                logger.info(
-                    f"Model designation is set to '{model_designation}' (via "
-                    f"probabilistic turbine_type='{turbine_type_probabilistically}') "
-                    "based on ProbabilisticMapper, "
-                    f"lat={lat}, lon={lon}, diameter={diameter}."
-                )
+                if model_designation:
+                    logger.info(
+                        f"Model designation is set to '{model_designation}' "
+                        f"(via turbine_type='{turbine_type_probabilistically}') "
+                        "based on ProbabilisticMapper, "
+                        f"lat={lat}, lon={lon}, diameter={diameter} "
+                        f"(match found in dataframe on index={matched_line_index})."
+                    )
 
-                self.add_to_cache(
-                    turbine_type_probabilistically, model_designation, matched_line_index
-                )
-                return model_designation, matched_line_index, "ProbabilisticMapper"
+                    self.add_to_cache(
+                        turbine_type_probabilistically, model_designation, matched_line_index
+                    )
+                    return model_designation, matched_line_index, "ProbabilisticMapper"
 
         # [Option 8]: Use DefaultTurbineSelector as final fallback
-        fallback_type = self.default_turbine_selector.get_default_turbine(lat, lon)
+        if self.use_default_selector:
+            fallback_type = self.default_turbine_selector.get_default_turbine(lat, lon)
 
-        if fallback_type:
-            (
-                model_designation,
-                matched_line_index,
-            ) = self._turbine_type_to_model_designation(fallback_type)
+            if fallback_type:
+                (
+                    model_designation,
+                    matched_line_index,
+                ) = self._turbine_type_to_model_designation(fallback_type)
 
-            if model_designation:
-                logger.info(
-                    f"Model designation is set to '{model_designation}' (via "
-                    f"fallback turbine_type='{fallback_type}') "
-                    f"based on DefaultTurbineSelector, lat={lat}, lon={lon}."
-                )
+                if model_designation:
+                    logger.info(
+                        f"Model designation is set to '{model_designation}' "
+                        f"(via turbine_type='{fallback_type}') "
+                        f"based on DefaultTurbineSelector, lat={lat}, lon={lon} "
+                        f"(match found in dataframe on index={matched_line_index})."
+                    )
 
-                self.add_to_cache(fallback_type, model_designation, matched_line_index)
-                return model_designation, matched_line_index, "DefaultTurbineSelector"
+                    self.add_to_cache(fallback_type, model_designation, matched_line_index)
+                    return model_designation, matched_line_index, "DefaultTurbineSelector"
 
-        # This should not happen anymore; just write out an error
-        logger.error(f"Cannot find turbine type for turbine at lat={lat}, lon={lon}.")
-        return None, None, "Error"
+        # Final option: discard this turbine
+        logger.error(f"Cannot find turbine type for turbine at {tag_str} with {props}.")
+        return None, None, "NotMatched"

@@ -79,12 +79,12 @@ class TurbineTypeManager:
         """
         logger.debug(
             f"Get model_designation by tower properties: "
-            f"diameter={diameter}, "
-            f"height={height}, "
-            f"power={power}, "
-            f"year={year}, "
-            f"is_offshore={is_offshore}, "
-            f"country={country}"
+            f"diameter={diameter} (type={type(diameter)}), "
+            f"height={height} (type={type(height)}), "
+            f"power={power} (type={type(power)}), "
+            f"year={year} (type={type(year)}), "
+            f"is_offshore={is_offshore} (type={type(is_offshore)}), "
+            f"country={country} (type={type(country)})"
         )
 
         filtered_df = self.get_specs_dataframe(filtered=True)

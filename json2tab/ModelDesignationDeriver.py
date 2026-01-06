@@ -327,6 +327,9 @@ class ModelDesignationDeriver:
 
         turbine_types = self.turbine_type_manager.get_specs_dataframe(filtered)
 
+        # Remove all FO_00000 types, so enriching cannot introduce wf101-types
+        turbine_types = turbine_types[~(turbine_types["model_designation"].str.match(r"FO_\d+", na=False))]
+
         filter_string = ""
         if manufacturer_pattern:
             turbine_types = turbine_types[
@@ -344,11 +347,11 @@ class ModelDesignationDeriver:
             filter_string = filter_string + f"manufacturer = {manufacturer}, "
 
         if diameter:
-            # Match on the integer-values of the diameter
+            # Match on the approximate integer-values of the diameter
             turbine_types = turbine_types[
-                abs(turbine_types["diameter"].astype(float) - float(diameter)) < 1
+                abs(turbine_types["diameter"].astype(float) - float(diameter)) < 5
             ]
-            filter_string = filter_string + f"diameter = {diameter} +/- 1, "
+            filter_string = filter_string + f"diameter = {diameter} +/- 5, "
 
         if power and power > 0 and exact_power_match:
             thresshold = (float(power) / 750) / 100
@@ -374,6 +377,22 @@ class ModelDesignationDeriver:
             if len(turbine_types_with_ws) > 0:
                 turbine_types = turbine_types_with_ws
                 filter_string = filter_string + "wind_speeds_length > 0, "
+
+        if len(turbine_types) > 1 and diameter:
+            stricter_filter = None
+            for thresshold in [3, 1]:
+                # Match on the integer-values of the diameter
+                turbine_types_prep = turbine_types[
+                    abs(turbine_types["diameter"].astype(float) - float(diameter)) < thresshold
+                ]
+
+                if len(turbine_types_prep) > 0:
+                    turbine_types = turbine_types_prep
+                    stricter_filter = thresshold
+            
+            if stricter_filter is not None:
+                filter_string += f"diameter = {diameter} +/- {stricter_filter}, "
+        
 
         if len(turbine_types) > 1 and power and power > 0 and exact_power_match:
             thresshold = (float(power) / 750) / 100
@@ -434,10 +453,14 @@ class ModelDesignationDeriver:
             modes = turbine_types["model_designation"].mode()
 
             if len(modes) > 1:
+                additional_data_dict = additional_data
+                if not isinstance(additional_data_dict, dict):
+                    additional_data_dict = additional_data_dict.to_dict()
+                    
                 logger.debug(
                     f"Found {len(modes)} possible model_designations; "
                     f"all are most frequent in database based on parameters "
-                    f"given in {data} and {additional_data}."
+                    f"given in {data} and {additional_data_dict}."
                 )
 
             if len(modes) > 0:

@@ -7,6 +7,7 @@ import pandas as pd
 
 from ..io.save_dataframe_as_csv import save_dataframe_as_csv
 from ..io.save_dataframe_as_geojson import save_dataframe_as_geojson
+from ..logs import logger
 
 
 def generate_output_filename(input_filename: str, output_extension: str) -> str:
@@ -53,3 +54,6 @@ def save_dataframe(
             save_dataframe_as_csv(dataframe, output_filename)
         elif ext.lower() in ["json", ".json", "geojson", ".geojson"]:
             save_dataframe_as_geojson(dataframe, output_filename)
+        else:
+            logger.warning(f"Could not derive valid output format for extension {ext}. "
+                           "No file written.")

@@ -103,10 +103,12 @@ class TurbineLocationTabFileWriter:
 
             # Write the actual location data
             skipCounter = 0
+            turbine_counter = 0
             for idx, turbine in matched_turbines.iterrows():
+                turbine_counter += 1
                 try:
                     print_processing_status(
-                        idx, total_turbines, "Writing turbines in location-tab file"
+                        turbine_counter, total_turbines, "Writing turbines in location-tab file"
                     )
 
                     # Fetch necessary information
@@ -124,38 +126,50 @@ class TurbineLocationTabFileWriter:
                     is_offshore = turbine.get("is_offshore")
                     model_designation = turbine.get(self.matcher.model_designation_key)
 
-                    # Format line with proper spacing and including model designation
-                    line = (
-                        f"{float(lon):10.4f}   "
-                        f"{float(lat):10.4f}   "
-                        f"{type_idx:>8}    "
-                        f"{radius:>8.2f}   "
-                        f"{height:>8.2f}   "
-                        "#| "
-                        f"{country} | "
-                        f"{is_offshore} | "
-                        f"{rated_power} | "
-                        f"{model_designation}\n"
-                    )
+                    tag_str = (f"N{lat}, E{lon} "
+                               f"({country}, {'off' if is_offshore else 'on'}shore)")
 
-                    if self._do_nwp_check(radius, height, model_designation, lon, lat):
-                        for _ in range(multiplicity):
-                            file.write(line)
+                    if model_designation is not None:
+                        # Format line with proper spacing and including model designation
+                        line = (
+                            f"{float(lon):10.4f}   "
+                            f"{float(lat):10.4f}   "
+                            f"{type_idx:>8}    "
+                            f"{radius:>8.2f}   "
+                            f"{height:>8.2f}   "
+                            "#| "
+                            f"{country} | "
+                            f"{is_offshore} | "
+                            f"{rated_power} | "
+                            f"{model_designation}\n"
+                        )
 
-                        if multiplicity > 1:
+                        if (self._do_nwp_check(radius, height, model_designation, lon, lat)):
+                            for _ in range(multiplicity):
+                                file.write(line)
+
+                            if multiplicity > 1:
+                                logger.warning(
+                                    f"Written {multiplicity} duplicated lines to represent "
+                                    f"the wind tubines in wind farm at {tag_str}."
+                                )
+                        else:
+                            # Note: at the moment the NWP cannot handle commented out
+                            # turbines, so completly remove them from the tab-file.
                             logger.warning(
-                                f"Written {multiplicity} duplicated lines to represent "
-                                f"the wind tubines in wind farm at N{lat} E{lon}."
+                                f"Basic NWP turbine property checks failed for this "
+                                "turbine(s); so skip this turbine(s) "
+                                f"[multiplicity={multiplicity}]. Line is removed."
                             )
+                            skipCounter += 1
                     else:
-                        # Note: at the moment the NWP cannot handle commented out
-                        # turbines, so completly remove them from the tab-file.
                         logger.warning(
-                            f"Basic turbine property checks failed for this turbine(s); "
+                            f"No turbine type matched for wind turbine at {tag_str}; "
                             f"so skip this turbine(s) [multiplicity={multiplicity}]. "
                             "Line is removed."
                         )
                         skipCounter += 1
+
 
                 except Exception as e:
                     logger.exception(f"Error writing location tab file at {idx}: {e}")
@@ -167,10 +181,10 @@ class TurbineLocationTabFileWriter:
                     f"Skipped {skipCounter} turbine{'s' if skipCounter > 1 else ''} "
                     "while writing location data."
                 )
-                print(f"\nWARNING: {msg}")
+                print(f"Note: {msg}")
                 logger.warning(msg)
 
-            logger.info("Finished writing tab file with model references")
+            logger.info("Finished writing turbine location tab file.")
 
     def _do_nwp_check(
         self,

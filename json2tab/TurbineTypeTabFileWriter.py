@@ -72,11 +72,11 @@ class TurbineTypeTabFileWriter:
         Returns:
             pandas.DataFrame with statistics
         """
-        type_idx_list = range(1, self.type_index_generator.max_type_idx() + 1)
-        frequency_list = matched_turbines[
-            self.type_index_generator.type_idx_key
-        ].value_counts()[type_idx_list]
-
+        key = self.type_index_generator.type_idx_key
+        frequency = matched_turbines[key].value_counts()
+        type_idx_list = frequency.index.get_level_values(key).to_list()
+        frequency_list = frequency[type_idx_list]
+            
         data = {
             "Type index": type_idx_list,
             "Manufacterer": [],
@@ -96,17 +96,20 @@ class TurbineTypeTabFileWriter:
                 matched_line_index = (
                     self.type_index_generator.type_idx_to_matched_line_index(type_index)
                 )
-                specs = self.write_specs_file(matched_line_index, filename)
+
+                if matched_line_index >= 0:
+                    specs = self.write_specs_file(matched_line_index, filename)
+                else:
+                    specs = {"model_designation": "No turbine type matched"}
+                    logger.warning("Skipped writing turbine type tab file for "
+                                  f"type_index = {type_index}; "
+                                  "no valid model designation found")
 
                 model_designation = specs.get("model_designation")
                 manufacturer = specs.get("manufacturer")
                 height = specs.get("height")
                 diameter = specs.get("diameter")
                 rated_power = specs.get("rated_power")
-
-                logger.info(
-                    f"Created {filename} for model designation: {model_designation}"
-                )
 
                 data["Model designation"].append(model_designation)
                 data["Manufacterer"].append(manufacturer)
@@ -119,7 +122,7 @@ class TurbineTypeTabFileWriter:
 
         # Compute installed capacity
         data["Installed capacity (MW)"] = [
-            freq * power / 1000
+            freq * power / 1000 if freq is not None and power is not None else None
             for freq, power in zip(data["Frequency"], data["Rated power (kW)"])
         ]
 
@@ -280,7 +283,7 @@ class TurbineTypeTabFileWriter:
                 )
 
             logger.info(
-                f"Written turbine type tab file for {model_designation} to {filename}"
+                f"Written turbine type tab file for '{model_designation}' to {filename}"
             )
 
             # Return the model designation used for the filename

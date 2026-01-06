@@ -258,7 +258,7 @@ def main(config: Dict[str, Any]):
             os.remove(file)
 
         # Process all turbine types and create the tab files
-        logger.info("Generating new turbine tab files")
+        logger.info("Generating new turbine type tab files")
         type_tab_writer = TurbineTypeTabFileWriter(
             config, turbine_matcher, type_index_generator
         )

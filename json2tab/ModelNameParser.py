@@ -30,26 +30,33 @@ def parse_model_name(model_name: str) -> dict:
     # Remove all multiple spaces from model name
     model_name = re.sub(r"\s\s+", " ", str(model_name))
 
-    # Replace all commas by dots
-    model_name = model_name.replace(",", ".")
-
     # Ensure model name starts with manufacturer-name
     model_name = ensure_manufacturer_prefix(model_name)
+
+    match = re.search(r"(?P<manufacturer>\w+), ", model_name)
+    if match:
+        # It looks like manufacturer and type are separated with a comma
+        # so remove the first comma that separates manufacturer and type
+        model_name = model_name.replace(", ", " ", 1)
+
+    # Replace all commas by dots
+    model_name = model_name.replace(",", ".")
 
     # Look for turbine model patterns within the name
     patterns = [
         # Common naming patterns for major manufacturers
         # Vestas pattern (e.g., V90, V112)
-        r"(?P<manufacturer>Vestas|(MHI Vestas Offshore)|(MHI Vestas)|MVOW)(\s|-)V(-|\s)?(?P<diameter>\d{2,3})(\s*-\s*(?P<power>\d+(\.\d+)?))?",
+        r"(?P<manufacturer>(Vestas Onshore)|Vestas|(MHI Vestas Offshore)|(MHI Vestas)|MVOW)(\s|-)V(-|\s)?(?P<diameter>\d{2,3})(\s*-\s*(?P<power>\d+(\.\d+)?))?",
         # Enercon pattern (e.g., E40, E82, E101)
         r"(?P<manufacturer>Enercon)( E)?(-|\s)?(?P<diameter>\d{2,3})( EP\d)?( E\d)?( (?P<power>\d+(\.\d+)?))?(\s?/\s?(?P<powerOW>\d+)\.?(?P<diameter2>\d+)?)?",
         # Match AN Bonus  (eg AN Bonus  450/36), Bonus (eg Bonus 37/450, Bonus B39/500  | and Bonus (Bonus-76-2.0) and Gamesa G49-2.0 before Siemens-Gamesa
-        r"(?P<manufacturer>AN(-|\s)Bonus) (?P<powerKW>\d+(\.\d+)?)/(?P<diameter>\d+)",
+        r"(?P<manufacturer>AN((-|\s)Bonus)?) (?P<powerKW>\d+(\.\d+)?)/(?P<diameter>\d+)",
         r"(?P<manufacturer>Bonus|Combi) (?P<diameter>\d+)/(?P<powerKW>\d+(\.\d+)?)",
         r"(?P<manufacturer>Gamesa|Bonus)(\s|-)(G|B)?(-|\s)?(?P<diameter>\d+)([-|/](?P<power>\d+(\.\d+)?))?",
         # Siemens / Gamesa / Siemens-Gamesa pattern (e.g., SWT-3.6-120)
         r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT)\s?(SWT|SG|G)?((-|\s)?(DD-(?P<power>\d+(\.\d+)?)))-(?P<diameter>\d+)",
         r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT)\s?(SWT|SG|G)?((-|\s)?(DD|(D?(?P<power>\d+(\.\d+)?))))?-(?P<diameter>\d+)?",
+        r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT) SG-(?P<diameter>\d+)",
         # Senvion, REpower pattern
         r"(?P<manufacturer>Kenersys) K\s?(?P<diameter>\d+)\s(?P<powerMW>\d+(\.\d+)?)MW",
         r"(?P<manufacturer>Senvion|REpower|(Jacobs PowerTec JPT)|(Jacobs Wind Electric)|Jacobs|(HSW Husumer Schiffs)|Kenersys)(\s|-|\.)\s?(M|HSW)?\s?(?P<power>\d+(\.(\d+|X))?)?((M|D|/|\s|-)\s?(?P<diameter>\d+))?((/|\s)(?P<power2>\d+(\.\d+)?))?",
@@ -64,8 +71,8 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>(Izar Turbinas)|Izar) Bonus (?P<diameter>\d+)(-|/)(?P<power>\d+(\.\d)?)",
         # Made - Endesa  AE-61/1.100 turbines; eg Made - Endesa  AE-61/1.100
         r"(?P<manufacturer>(Made\s?-\s?Endesa)|Made|Endesa) (AE|M)(-|\s)(?P<diameter>\d+)((-|/)(?P<power>\d+(\.\d)?))?",
-        # Suzlon turbines; eg Suzlon  S 60-1000
-        r"(?P<manufacturer>Suzlon) S(\s|-)?(?P<diameter>\d+)((-|/)(?P<power>\d+(\.\d)?))?",
+        # Suzlon turbines; eg Suzlon  S 60-1000, Suzlon 88 - 2.1 MW
+        r"(?P<manufacturer>Suzlon) (S(\s|-)?)?(?P<diameter>\d+)(((\s?(-|/)\s?)|\s)(?P<power>\d+(\.\d)?))?",
         # Reference turbines  (eg REF-6.0, REF-8.0)
         r"(?P<manufacturer>REF)(\s|-)(?P<powerMW>\d+(\.\d)?)",
         # Nordex (eg Nordex N131/3300, Nordex N149/4.0-4.5, Nordex N149/5.X, Nordex N90)
@@ -80,8 +87,10 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>(NEG(\s|-)Micon)|NEG|Micon|(NEG Wind World)|(Wind World))\s+(NM|M|W|WW)?\s*(?P<diameter>\d+)C?((/|-)(?P<powerKW>\d+))?",
         # Nordtank pattern (eg Nordtank  NTK 1500 64)
         r"(?P<manufacturer>(Nordtank Energy Group)|Nordtank|NEG)(\s+NTK\s?((?P<powerKW>\d+)(-(?P<unknown>\d+))?)((/|\s)(?P<diameter>\d+))?((/|\s)(?P<hub_height>\d+))?)?",
-        # Goldwind/Acciona/Frisia/Vensys pattern (eg Goldwind  GW 87 / 1500, Acciona  AW-148/3300, Frisia  F48/750  )
-        r"(?P<manufacturer>Goldwind|Acciona|Frisia|Vensys)\s+(S|GW|GWH|AW|F)?(-|\s)?(?P<diameter>\d+)(\s?/\s?(?P<powerKW>\d+))?",
+        # Goldwind/Frisia/Vensys pattern (eg Goldwind  GW 87 / 1500, Frisia  F48/750  )
+        r"(?P<manufacturer>Goldwind|Acciona|Frisia|Vensys)\s+(S|GW|GWH|F)?(-|\s)?(?P<diameter>\d+)(\s?/\s?(?P<powerKW>\d+))?",
+        # Acciona pattern (eg Acciona  AW-148/3300 )
+        r"(?P<manufacturer>Acciona)\s+(AW)?(-|\s)?(?P<diameter>\d+)(\s?/\s?(?P<powerKW>\d+))?",
         # Leitwind pattern (eg Leitwind  LTW42 250 )
         r"(?P<manufacturer>Leitwind)\s+LTW\s?(?P<diameter>\d+)\s(?P<powerKW>\d+)",
         # Fuhrländer LLC pattern (eg Fuhrländer LLC  WTU2.5-103 )
@@ -94,6 +103,12 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>Envision) (EN|N) (?P<diameter>\d+)-(?P<power>\d+(\.\d+)?)",
         # IWT pattern (eg IWT  V90 )
         r"(?P<manufacturer>IWT)\s+V(?P<diameter>\d+)",
+        # Seewind pattern (eg Seewind  S 52 750 )
+        r"(?P<manufacturer>Seewind) (S\s?)?(?P<diameter>\d+)(\s|/)(?P<powerKW>\d+)",
+        # Kleinwind pattern (eg Kleinwind GmbH  Schachner Windrad SW10 )
+        r"(?P<manufacturer>(Kleinwind GmbH)|Kleinwind)( Schachner Windrad)? SW(?P<powerKW>\d+(\.\d+)?)",
+        # Windtec pattern (eg Windtec  WT1566 )
+        r"(?P<manufacturer>Windtec) (WT\s?)?(?P<powerdiameter>\d+)",
         # Eno Energy  Eno 126 4.8
         r"(?P<manufacturer>Eno Energy)\s+eno (?P<diameter>\d+)(\s(?P<power>\d+(\.\d+)))?",
         # DeWind (eg DeWind  D6 64/1250 )
@@ -319,7 +334,7 @@ def parse_model_name(model_name: str) -> dict:
                 and power is not None
                 and diameter is None
                 and manufacturer.upper()
-                in ["WTN Wind TechnikNord", "Wind TechnikNord", "WindTechnikNord", "WTN"]
+                in [x.upper() for x in ["WTN Wind TechnikNord", "Wind TechnikNord", "WindTechnikNord", "WTN", "Windtec"]]
                 and power % 10 != 0
             ):
                 # The power field is a mix of power and diameter; split the two

@@ -49,6 +49,10 @@ def get_wf101_manufacturer(MAN_CODE: int) -> str:
 
     # Overrides to fix multi manufacturer regex matches
     if ( MAN_CODE ==  0 ): MANUFACTURER = "Senvion"
-    if ( MAN_CODE ==  6 ): MANUFACTURER = "Siemens SWT"
+    if ( MAN_CODE ==  1 ): MANUFACTURER = "Vestas"
+    if ( MAN_CODE ==  3 ): MANUFACTURER = "GE General Electric"
+    if ( MAN_CODE ==  6 ): MANUFACTURER = "Siemens"
+    if ( MAN_CODE == 43 ): MANUFACTURER = "Kleinwind GmbH"
+    
 
     return MANUFACTURER

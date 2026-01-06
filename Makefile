@@ -68,6 +68,19 @@ select_country:
 remove_country:
 	json2tab --debug=2 --convert generated_database/osm.csv --type remove_country --country Germany --output generated_database/osm_wo_germany.csv
 
+igwindkraft_web:
+	json2tab --debug=3 --convert https://www.igwindkraft.at/aktuelles/windrad-karte --type austria --output generated_database/austria.csv
+
+igwindkraft_from_file:
+	json2tab --debug=3 --convert ms_data/at/igwindkraft-windrad-karte.json --type austria --output generated_database/austria.csv
+
+austria:
+	json2tab --debug=2 --convert ms_data/at/igwindkraft-windrad-karte.json --type austria --output generated_database/austria_igwindkraft.csv
+	json2tab --debug=2 --convert generated_database/wf101.csv --type select_country --country Austria --output generated_database/austria_wf101.csv
+	json2tab --debug=2 --convert generated_database/osm.csv --type select_country --country Austria --output generated_database/austria_osm.csv
+	json2tab --debug=3 --merge generated_database/austria_igwindkraft.csv generated_database/austria_osm.csv --output generated_database/austria_igwindkraft+osm.csv
+	json2tab --debug=3 --merge generated_database/austria_igwindkraft.csv generated_database/austria_wf101.csv --output generated_database/austria_igwindkraft+wf101.csv
+
 
 location_database:
 	rm -rf generated_database
@@ -87,18 +100,20 @@ location_database:
 	json2tab --debug=2 --convert ms_data/fin/finland_wind_fleet_data_202506.json --type finland --output generated_database/finland.csv
 	json2tab --debug=2 --convert ms_data/de/Gesamtdatenexport_20251113_25.2/EinheitenWind.xml --type germany --output generated_database/germany.csv
 	json2tab --debug=2 --convert "ms_data/dnk/Vindmølledata til 2025-01.xlsx" --type denmark --output generated_database/denmark.csv
-	json2tab --debug=3 --convert "ms_data/it/Italian_Wind_Farms_db.xlsx" --type italy --output generated_database/italy.csv
-	json2tab --debug=3 --convert "ms_data/bg/bulgarian_wind_farms_combined_v2.csv" --type csv2csv --output generated_database/bulgaria.csv
+	json2tab --debug=3 --convert ms_data/it/Italian_Wind_Farms_db.xlsx --type italy --output generated_database/italy.csv
+	json2tab --debug=3 --convert ms_data/bg/bulgarian_wind_farms_combined_v2.csv --type csv2csv --output generated_database/bulgaria.csv
+	json2tab --debug=2 --convert ms_data/at/igwindkraft-windrad-karte.json --type austria --output generated_database/austria_igwindkraft.csv
 	echo "TODO: SWEDEN (FOR HISTORY)"
 
 
 	echo "=== FIXING COUNTRY AND IS_OFFSHORE FLAG FOR ALL PRODUCES CSVs ==="
 	json2tab --debug=2 --convert generated_database/*.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
 
-	echo "=== BUILD AUSTRIA, ENRICH WF101 AUSTRIA DATA WITH OSM ==="
+	echo "=== BUILD AUSTRIA, ENRICH OSM AUSTRIA DATA WITH WF101 ==="
 	json2tab --debug=2 --convert generated_database/wf101.csv --type select_country --country Austria --output generated_database/austria_wf101.csv
 	json2tab --debug=2 --convert generated_database/osm.csv --type select_country --country Austria --output generated_database/austria_osm.csv
-	json2tab --debug=2 --merge generated_database/austria_wf101.csv generated_database/austria_osm.csv --merge-mode enrich_first --output generated_database/austria.csv
+	json2tab --debug=2 --merge generated_database/austria_osm.csv generated_database/austria_wf101.csv --merge-mode enrich_first --output generated_database/austria_osm_wf101.csv
+	json2tab --debug=2 --merge generated_database/austria_igwindkraft.csv generated_database/austria_osm_wf101.csv --output generated_database/austria.csv
 
 	echo "=== RESTRICT MS DATA TO ONLY OWN COUNTRY ==="
 	json2tab --debug=2 --convert generated_database/netherlands.csv --type select_country --country Netherlands
@@ -107,6 +122,7 @@ location_database:
 	json2tab --debug=2 --convert generated_database/denmark.csv --type select_country --country Denmark
 	json2tab --debug=2 --convert generated_database/finland.csv --type select_country --country Finland
 	json2tab --debug=2 --convert generated_database/italy.csv --type select_country --country Italy
+	json2tab --debug=2 --convert generated_database/austria.csv --type select_country --country Austria
 
 	echo "=== MERGING MEMBER STATE INPUT DATA FILES ==="
 	json2tab --debug=2 --merge generated_database/netherlands.csv generated_database/belgium.csv --output generated_database/netherlands+belgium.csv
@@ -119,7 +135,7 @@ location_database:
 
 	json2tab --debug=2 --merge generated_database/netherlands+belgium+germany+austria.csv generated_database/denmark+finland+italy+bulgaria.csv --output generated_database/ms_data.csv
 
-	echo "=== MERGING EUROPE MAPS ==="
+	echo "=== MERGING EUROPE MAPS (W/O COUNTRY EXCLUSIVE DATA) ==="
 	json2tab --debug=2 --merge generated_database/osm.csv generated_database/wf101.csv --output generated_database/osm+wf101.csv
 	json2tab --debug=2 --convert generated_database/osm+wf101.csv --type remove_country --country Germany Denmark Italy Bulgaria Austria
 	json2tab --debug=2 --merge generated_database/osm+wf101.csv generated_database/ms_data.csv --output generated_database/euromap_$(shell date +%Y%m%d).[csv,geojson]
