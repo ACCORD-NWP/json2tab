@@ -1,14 +1,17 @@
 """Module with get_lat_lon_matrix for wind turbine location data convertion."""
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
-import shapely
 
 try:
     import geopandas as gpd
 except ImportError:
     gpd = None
+
+try:
+    import shapely
+except ImportError:
+    shapely = None
 
 from ..logs import logger
 
@@ -42,19 +45,23 @@ def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool 
     longitude = None
 
     if "geometry" in cols:
-        if isinstance(data["geometry"], str):
+        if isinstance(data["geometry"], str) and shapely is not None:
             geo_data = data
             geo_data["geometry"] = shapely.from_wkt(data["geometry"])
         elif isinstance(data["geometry"], pd.Series) and isinstance(
             data["geometry"].iloc[0], str
-        ):
+        ) and gpd is not None:
             geometry = gpd.GeoSeries.from_wkt(data["geometry"])
             geo_data = gpd.GeoDataFrame(data, geometry=geometry)
         else:
             geo_data = data
 
-        longitude = geo_data["geometry"].x
-        latitude = geo_data["geometry"].y
+        try:
+            longitude = geo_data["geometry"].x
+            latitude = geo_data["geometry"].y
+        except AttributeError:
+            longitude = None
+            latitude = None
 
     if latitude is None:
         lat_fields = ["latitude", "lat", "Latitude", "N"]
