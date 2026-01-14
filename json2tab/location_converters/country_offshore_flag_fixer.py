@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
+from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
 from ..logs import logger
 from ..tools.Location2CountryConverter import Location2CountryConverter
@@ -60,21 +61,22 @@ def country_offshore_flag_fixer(
         logger.debug(f"output filename: {output_filename}")
 
         if input_filename is not None:
-            data = pd.read_csv(input_filename)
+            data = read_locationdata_as_dataframe(input_filename)
 
-        logger.info(f"Loaded {len(data.index)} turbines from {input_filename}")
+        if data is not None:
+            logger.info(f"Loaded {len(data.index)} turbines from {input_filename}")
 
-        data["is_offshore"], data["country"] = zip(
-            *data.apply(
-                lambda row: get_offshore_and_country(
-                    loc2eez, loc2land, lon=row["longitude"], lat=row["latitude"]
-                ),
-                axis=1,
+            data["is_offshore"], data["country"] = zip(
+                *data.apply(
+                    lambda row: get_offshore_and_country(
+                        loc2eez, loc2land, lon=row["longitude"], lat=row["latitude"]
+                    ),
+                    axis=1,
+                )
             )
-        )
 
-        if output_filename is not None:
-            save_dataframe(data, output_filename)
+            if output_filename is not None:
+                save_dataframe(data, output_filename)
 
     return data
 

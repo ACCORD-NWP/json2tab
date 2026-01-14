@@ -2,7 +2,7 @@
 
 import contextlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .logs import logger
 
@@ -127,7 +127,7 @@ def get_float_from_dict(
     data: Dict,
     default: float = 0.0,
     require_positive: bool = False,
-) -> float:
+) -> Tuple[float, str]:
     """Gets the float value from data[key] where key is an element of the keys list.
 
     Args:
@@ -137,8 +137,9 @@ def get_float_from_dict(
         require_positive: Flag indicating if match should be positive
 
     Returns:
-        A valid (not None, empty or NaN) float value of data[key] for key in keys,
-        otherwise default
+        output:   A valid (not None, empty or NaN) float value of data[key] 
+                  for key in keys, otherwise default
+        key:      The matched key
     """
     if isinstance(keys, str):
         keys = [keys]
@@ -150,11 +151,11 @@ def get_float_from_dict(
                 try:
                     output = float(value)
                     if not require_positive or (require_positive and output > 0):
-                        return output
+                        return output, key
                 except (ValueError, TypeError):
                     pass
 
-    return default
+    return default, None
 
 
 def get_float_from_dict_list(
@@ -162,7 +163,7 @@ def get_float_from_dict_list(
     dict_list: List[Dict],
     default: float = 0.0,
     require_positive: bool = False,
-) -> float:
+) -> Tuple[float, str]:
     """Gets the float value from data[key].
 
        Where key is an element of the keys list and dict an element of dict list
@@ -174,15 +175,16 @@ def get_float_from_dict_list(
         require_positive: Flag indicating if match should be positive
 
     Returns:
-        A valid (not None, empty or NaN) float value of dict[key] for key
-        in keys and dict in dict_list, otherwise default
+        output:  A valid (not None, empty or NaN) float value of dict[key]
+                 for key in keys and dict in dict_list, otherwise default
+        key:     The matched key
     """
     for data in dict_list:
-        value = get_float_from_dict(keys, data, default, require_positive)
+        value, key = get_float_from_dict(keys, data, default, require_positive)
         if value and value > 0:
-            return value
+            return value, key
 
-    return default
+    return default, None
 
 
 def get_radius_from_dict(data: Dict, default: float = 0.0) -> float:
@@ -195,13 +197,13 @@ def get_radius_from_dict(data: Dict, default: float = 0.0) -> float:
     Returns:
         A valid (not None, empty or NaN) float value for radius, otherwise default
     """
-    radius = get_float_from_dict(
+    radius, _ = get_float_from_dict(
         ["radius", "radius (m)"], data, default, require_positive=True
     )
     if radius and radius > 0:
         return radius
 
-    diameter = get_float_from_dict(
+    diameter, _ = get_float_from_dict(
         [
             "diameter",
             "diameter (m)",
@@ -209,6 +211,7 @@ def get_radius_from_dict(data: Dict, default: float = 0.0) -> float:
             "rotor diameter",
             "rotor diameter (m)",
             "Rotor diameter (m)",
+            "Rotordiameter (m)",
             "diam",
         ],
         data,
@@ -293,18 +296,22 @@ def get_height(specs: Dict | List[Dict], default: float = 0.0) -> float:
         "hub height",
         "Hub height",
         "hub height (m)",
+        "Hub height",
         "Hub height (m)",
         "height",
         "z_height (m)",
         "z_height",
         "ash",
         "hoogte_paa",
+        "Navhöjd (m)",
     ]
 
     if isinstance(specs, list):
-        return get_float_from_dict_list(fields, specs, default, require_positive=True)
-
-    return get_float_from_dict(fields, specs, default, require_positive=True)
+        height, _ = get_float_from_dict_list(fields, specs, default, require_positive=True)
+    else:
+        height, _ = get_float_from_dict(fields, specs, default, require_positive=True)
+    
+    return height
 
 
 def get_rated_power_kw(specs: Dict[str, Any] | List[Dict], default: float = 0) -> float:
@@ -319,12 +326,17 @@ def get_rated_power_kw(specs: Dict[str, Any] | List[Dict], default: float = 0) -
     """
     power_fields = [
         "rated_power",
+        "rated_power_kw",
+        "rated_power_mw",
         "rated power",
         "Rated power",
         "power_rating",
+        "power_rating_kw",
+        "power_rating_mw",
         "power",
         "kw",
         "power_kw",
+        "power_mw",
         "vermogen_m",
         "P_rated",
         "nominal_power",
@@ -333,25 +345,34 @@ def get_rated_power_kw(specs: Dict[str, Any] | List[Dict], default: float = 0) -
         "capacity",
         "Capacity (kW)",
         "Capacity",
+        "Maxeffekt (MW)",
     ]
 
     diameter = None
     if isinstance(specs, list):
-        rated_power = get_float_from_dict_list(
+        rated_power, key = get_float_from_dict_list(
             power_fields, specs, default, require_positive=True
         )
         radius = get_radius_from_dict_list(specs, None)
         if radius is not None:
             diameter = 2 * radius
     else:
-        rated_power = get_float_from_dict(
+        rated_power, key = get_float_from_dict(
             power_fields, specs, default, require_positive=True
         )
         radius = get_radius_from_dict(specs, None)
         if radius is not None:
             diameter = 2 * radius
 
-    return power_to_kw(rated_power, diameter=diameter) or default
+    unit = None
+    if isinstance(key, str):
+        key = key.upper()
+        if "MW" in key:
+            unit = "MW"
+        elif "KW" in key:
+            unit = "KW"
+
+    return power_to_kw(rated_power, known_unit=unit, diameter=diameter) or default
 
 
 def get_installed_power(specs: Dict[str, Any] | List[Dict], default: float = 0) -> float:
@@ -366,17 +387,23 @@ def get_installed_power(specs: Dict[str, Any] | List[Dict], default: float = 0) 
     """
     power_fields = [
         "installed_power",
+        "installed_power_mw",
+        "installed_power_kw",
         "installed power",
         "Installed power",
         "Installed power [MW]",
+        "Installed power [KW]",
+        "Total power",
+        "Total power [kW]",
+        "Total power [MW]",
     ]
 
     if isinstance(specs, list):
-        installed_power = get_float_from_dict_list(
+        installed_power, key = get_float_from_dict_list(
             power_fields, specs, default, require_positive=True
         )
     else:
-        installed_power = get_float_from_dict(
+        installed_power, key = get_float_from_dict(
             power_fields, specs, default, require_positive=True
         )
 

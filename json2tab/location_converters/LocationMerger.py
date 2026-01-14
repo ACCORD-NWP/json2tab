@@ -10,6 +10,7 @@ from typing import List, Optional, Tuple
 import pandas as pd
 from scipy.spatial import KDTree
 
+from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
 from ..location_converters.get_lat_lon_matrix import get_lat_lon_matrix
 from ..logs import logger, logging
@@ -121,23 +122,19 @@ def location_merger(
     if merged_file is not None:
         print(f"Merged turbines are written to {merged_file}")
 
-    df_file1 = pd.read_csv(file1)
-    df_file2 = pd.read_csv(file2)
+    df_file1 = read_locationdata_as_dataframe(file1)
+    df_file2 = read_locationdata_as_dataframe(file2)
 
-    if "source" not in df_file1.columns:
-        if label_source1 is None:
-            _, label_source1 = os.path.split(file1)
+    if label_source1 is not None:
         df_file1["source"] = label_source1
         logger.info(f"Set source-field for {file1} to '{label_source1}'")
 
-    if "source" not in df_file2.columns:
-        if label_source2 is None:
-            _, label_source2 = os.path.split(file2)
+    if label_source2 is not None:
         df_file2["source"] = label_source2
         logger.info(f"Set source-field for {file2} to '{label_source2}'")
 
-    logger.info(f"Loaded {len(df_file1)} turbines from {file1}")
-    logger.info(f"Loaded {len(df_file2)} turbines from {file2}")
+    logger.info(f"Loaded {len(df_file1.index)} turbines from {file1}")
+    logger.info(f"Loaded {len(df_file2.index)} turbines from {file2}")
 
     (
         merged_turbines,
@@ -209,6 +206,36 @@ def location_merger(
 
     logger.info(f"Merged dataframe contains {len(df_combined_turbines.index)} turbines.")
     save_dataframe(df_combined_turbines, output_file)
+
+
+
+
+
+def standarize_dataframe(data: pd.DataFrame, always: bool = False) -> pd.DataFrame:
+    """Convertion a pandas.DataFrame to a dataframe with standarized turbine fields.
+
+    Args:
+        data (pandas.DataFrame): The dataframe containing turbine information
+
+    Returns:
+        pandas.DataFrame with standarized turbine information
+    """
+    turbine_keys = set(Turbine().to_dict().keys())
+
+    if always or (data is not None and len(set(data.columns) - turbine_keys) > 0):
+        # Convert data rows to interpret the rows as standarized Turbine
+        logger.debug(
+            f"Converting info for {len(data.index)} turbines to "
+            "standarized turbine data."
+        )
+
+        turbines = []
+        for _, row in data.iterrows():
+            turbines.append(datarow_to_turbine(row))
+
+        data = pd.DataFrame(turbines)
+    return data
+
 
 
 def merge_dataframes(
@@ -427,7 +454,7 @@ def merge_turbine_data(
 
     id_field, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["id", "ID", "GSRN", "Turbine identifier (GSRN)"],
+            ["id", "ID", "GSRN", "Turbine identifier (GSRN)", "Verk-ID"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
@@ -437,7 +464,7 @@ def merge_turbine_data(
     )
     name, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["name", "naam", "Turbine", "WFNAME", "nr_turbine", "Location"],
+            ["name", "Name", "naam", "Turbine", "WFNAME", "nr_turbine", "Location"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
@@ -445,6 +472,24 @@ def merge_turbine_data(
         alternative_source,
         alternative_used,
     )
+
+    name2, alternative_used = fetch_data(
+        lambda source, default=None: get_value_from_dict(
+            ["2nd name", "alt_name", "alt name"],
+            source if isinstance(source, dict) else source.to_dict(),
+            default,
+        ),
+        preferred_source,
+        alternative_source,
+        alternative_used,
+    )
+
+    if name2 is not None and not(isinstance(name2, float) and math.isnan(name2)):
+        if str(name2).lower().startswith(str(name).lower()):
+            name = name2
+        else:
+            name = f"{name} ({name2})"
+
     turbine_id, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
             [
@@ -471,9 +516,9 @@ def merge_turbine_data(
 
     manufacturer, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["manufacturer", "Manufacture"],
+            ["manufacturer", "Manufacturer", "Manufacture", "Fabrikat"],
             source if isinstance(source, dict) else source.to_dict(),
-            default,
+            default=default,
         ),
         preferred_source,
         alternative_source,
@@ -489,9 +534,11 @@ def merge_turbine_data(
                 "model",
                 "Type designation",
                 "Model wind turbine",
+                "Modell",
+                "Turbine",
             ],
             source if isinstance(source, dict) else source.to_dict(),
-            default,
+            default=default,
         ),
         preferred_source,
         alternative_source,
@@ -503,7 +550,7 @@ def merge_turbine_data(
             lambda source, default=None: get_value_from_dict(
                 ["wf101_type"],
                 source if isinstance(source, dict) else source.to_dict(),
-                default,
+                default=default,
             ),
             preferred_source,
             alternative_source,
@@ -531,9 +578,9 @@ def merge_turbine_data(
 
     is_offshore, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["is_offshore", "ondergrond", "Type of location"],
+            ["is_offshore", "ondergrond", "Type of location", "Placering"],
             source if isinstance(source, dict) else source.to_dict(),
-            default,
+            default=default,
         ),
         preferred_source,
         alternative_source,
@@ -549,10 +596,13 @@ def merge_turbine_data(
                 "site",
                 "farm id",
                 "name",
+                "Name",
                 "naam",
+                "Location",
+                "Projekteringsområde"
             ],
             source if isinstance(source, dict) else source.to_dict(),
-            default,
+            default=default,
         ),
         preferred_source,
         alternative_source,
@@ -560,7 +610,7 @@ def merge_turbine_data(
     )
     n_turbines, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["n_turbines", "No. of wind turbines"],
+            ["n_turbines", "Number of turbines", "No. of wind turbines"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
@@ -568,6 +618,9 @@ def merge_turbine_data(
         alternative_source,
         alternative_used,
     )
+
+    if n_turbines is not None and (not wind_farm):
+        wind_farm = name
 
     if rated_power is None and n_turbines is not None:
         installed_power, alternative_used = fetch_data(
@@ -577,9 +630,12 @@ def merge_turbine_data(
             alternative_used,
         )
         if installed_power is not None:
-            if n_turbines == 0:
-                n_turbines = 1
-            rated_power = power_to_kw(installed_power / n_turbines, known_unit="MW")
+            if n_turbines > 0:
+                rated_power = power_to_kw(installed_power / n_turbines)
+            else:
+                logger.warning(f"Installed power is provided for windfarm '{wind_farm}' "
+                               f"but n_turbines={n_turbines}; "
+                               "so the rated_power for this windfarm is ignored")
 
     start_date, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
@@ -590,6 +646,8 @@ def merge_turbine_data(
                 "Date of commission",
                 "year",
                 "Date of original connection to grid",
+                "Uppfört",
+                "Commissioning date"
             ],
             source if isinstance(source, dict) else source.to_dict(),
             default,
@@ -606,6 +664,8 @@ def merge_turbine_data(
                 "decommissioning",
                 "Date of decommissioning",
                 "Date of decommissioning",
+                "Nedmonterat",
+                "Decommissioning date",
             ],
             source if isinstance(source, dict) else source.to_dict(),
             default,
@@ -616,7 +676,7 @@ def merge_turbine_data(
     )
     country, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["country", "land"],
+            ["country", "Country", "land"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
@@ -668,7 +728,7 @@ def merge_turbine_data(
     )
     height_offset, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["height_offset"],
+            ["height_offset", "Markhöjd (m)"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
@@ -678,32 +738,16 @@ def merge_turbine_data(
     )
 
     # Parse is_offshore field
-    if is_offshore in ["zee", "HAV"]:
-        is_offshore = True
-    elif is_offshore in ["land", "LAND"]:
-        is_offshore = False
-    else:
-        with contextlib.suppress(ValueError):
-            is_offshore = bool(is_offshore)
+    if is_offshore is not None:
+        if isinstance(is_offshore, str) and is_offshore.lower() in ["zee", "hav", "vatten"]:
+            is_offshore = True
+        elif isinstance(is_offshore, str) and is_offshore.lower() in ["land"]:
+            is_offshore = False
+        else:
+            with contextlib.suppress(ValueError):
+                is_offshore = bool(is_offshore)
 
     diameter = 2 * radius if radius is not None else None
-
-    rated_power = power_to_kw(rated_power, diameter=diameter)
-    if (
-        rated_power is not None
-        and diameter is not None
-        and rated_power < 20
-        and diameter > 0
-    ):
-        rated_power_v2 = power_to_kw(rated_power, diameter=2 * diameter)
-        if rated_power_v2 > 1000 and radius < hub_height:
-            logger.info(
-                "Rated power seems unlikely low; "
-                "can be reinterpreted by assuming radius is specified as diameter."
-            )
-            rated_power = rated_power_v2
-            radius = diameter
-            diameter = 2 * radius
 
     # Determine source
     if alternative_used:
@@ -712,7 +756,7 @@ def merge_turbine_data(
             or f"{preferred_source.get('source')}+{alternative_source.get('source')}"
         )
     else:
-        source = preferred_source["source"]
+        source = preferred_source.get("source")
 
     if is_offshore and name == wind_farm:
         name = f"{wind_farm} {turbine_id}"

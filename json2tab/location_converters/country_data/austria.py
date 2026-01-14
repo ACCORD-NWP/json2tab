@@ -18,7 +18,7 @@ except (ImportError):
     requests = None
 
 from ...io.writers import save_dataframe
-from ...logs import logger
+from ...logs import logger, logging
 from ...Turbine import Turbine
 
 def austria(
@@ -179,7 +179,7 @@ def austria(
         save_dataframe(data, output_filename)
 
         logger.warning(f"Skipped {len(skipped_turbines)} turbines")
-        if len(skipped_turbines) > 0:
+        if len(skipped_turbines) > 0 and logger.getEffectiveLevel() <= logging.DEBUG:
             save_dataframe(pd.DataFrame(skipped_turbines), f"{output_filename}.skipped.csv")
         
         return data

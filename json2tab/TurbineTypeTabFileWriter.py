@@ -254,10 +254,10 @@ class TurbineTypeTabFileWriter:
             params = specs.get("additional_params", {})
             radius = get_radius([params, specs], 0)
             height = get_height([params, specs], 0)
-            ct_low = get_float_from_dict_list(
+            ct_low, _ = get_float_from_dict_list(
                 ["cT_low (-)", "ct_low", "cT_low"], [params, specs], default=0
             )
-            ct_high = get_float_from_dict_list(
+            ct_high, _ = get_float_from_dict_list(
                 ["cT_high (-)", "ct_high", "cT_high"], [params, specs], default=0
             )
 

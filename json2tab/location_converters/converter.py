@@ -9,7 +9,9 @@ from ..location_converters.country_data.finland import finland
 from ..location_converters.country_data.flanders import flanders
 from ..location_converters.country_data.germany import germany
 from ..location_converters.country_data.italy import italy
+from ..location_converters.country_data.sweden import sweden
 from ..location_converters.country_data.netherlands import netherlands
+from ..location_converters.country_data.thewindpower import thewindpower
 from ..location_converters.country_filters import (
     fix_country_offshore,
     remove_from_countries,
@@ -25,6 +27,9 @@ supported_conversion_types: List[str] = sorted(
         "fix_country_offshore",
         "netherlands",
         "osm",
+        "osm_windturbine",
+        "osm_windfarm",
+        "osm_windturbine_windfarm",
         "csv2geojson",
         "csv_to_geojson",
         "geojson2csv",
@@ -41,6 +46,10 @@ supported_conversion_types: List[str] = sorted(
         "flanders",
         "germany",
         "italy",
+        "sweden",
+        "twp",
+        "thewindpower",
+        "thewindpower.net",
         "wf2csv",
         "wf101_to_csv",
         "wf2geojson",
@@ -58,6 +67,7 @@ def converter(
     input_filenames: str | List[str],
     output_filename: Optional[str] = None,
     country: Optional[str | List[str]] = None,
+    rename_rules: Optional[str|dict] = None
 ):
     """Entry point for different converters.
 
@@ -68,6 +78,7 @@ def converter(
         output_filename (str):             Output file for converter
         country (str | list[str]):         Country or list of countries as used in
                                            `select_country` and `remove_country`
+        rename_rules (str | dict):         Rename rules to rename columns in input
     """
     # Process first multi-input file converters
     if convert_type == "fix_country_offshore":
@@ -81,6 +92,12 @@ def converter(
         netherlands(rivm_file, rws_file, output_filename)
     elif convert_type == "osm":
         osm_data_fetcher(output_filename, input_filenames[0])
+    elif convert_type == "osm_windturbine":
+        osm_data_fetcher(output_filename, input_filenames[0], query_windturbine=True, query_windfarm=False)
+    elif convert_type == "osm_windfarm":
+        osm_data_fetcher(output_filename, input_filenames[0], query_windturbine=False, query_windfarm=True)
+    elif convert_type == "osm_windturbine_windfarm":
+        osm_data_fetcher(output_filename, input_filenames[0], query_windturbine=True, query_windfarm=True)
 
     else:
         # Only support for explicit output argument if converter converts a single file
@@ -97,10 +114,13 @@ def converter(
                 "tab_to_csv",
                 "txt2csv" "txt_to_csv",
             ]:
-                convert_between_csv_geojson(input_filename, output_filename)
+                convert_between_csv_geojson(input_filename, output_filename, rename_rules=rename_rules)
 
             elif convert_type in ["csv2csv", "csv_to_csv"]:
-                csv_to_csv(input_filename, output_filename)
+                csv_to_csv(input_filename, output_filename, rename_rules=rename_rules)
+
+            elif convert_type in ["twp", "thewindpower", "thewindpower.net"]:
+                thewindpower(input_filename, output_filename, rename_rules=rename_rules)
 
             elif convert_type == "austria":
                 austria(input_filename, output_filename)
@@ -119,6 +139,9 @@ def converter(
 
             elif convert_type == "italy":
                 italy(input_filename, output_filename)
+
+            elif convert_type == "sweden":
+                sweden(input_filename, output_filename)
 
             elif convert_type in [
                 "wf2csv",

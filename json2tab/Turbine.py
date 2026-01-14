@@ -28,7 +28,7 @@ class Turbine:
 
     height_offset: float = None
     wind_farm: str = None
-    n_turbines: float = None
+    n_turbines: int = None
     operator: str = None
 
     start_date: date = None

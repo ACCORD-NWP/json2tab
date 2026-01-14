@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .io.readers import read_locationdata_as_dataframe
-from .location_converters.csv_to_csv import convert_dataframe as standarize_dataframe
+from .location_converters.LocationMerger import standarize_dataframe
 from .logs import logger
 from .utils import unify_file_list
 

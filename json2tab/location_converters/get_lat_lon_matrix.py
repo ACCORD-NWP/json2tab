@@ -14,7 +14,7 @@ from ..logs import logger
 
 
 def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool = True):
-    """Remove turbines with a short distance to each orther.
+    """Get matrix with two columns containing lat and lon for all turbines in data
 
     Args:
         data: DataFrame containing wind turbine data

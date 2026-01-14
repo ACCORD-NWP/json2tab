@@ -11,13 +11,14 @@ from ..Turbine import Turbine
 
 
 def read_locationdata_as_dataframe(
-    input_filename: str, ext: Optional[str] = None
+    input_filename: str, ext: Optional[str] = None, rename_rules: Optional[str|dict] = None
 ) -> pd.DataFrame:
     """Reads dataframe with wind turbine location data from a file.
 
     Args:
-        input_filename (str): Filename with wind turbine location data
-        ext (str):            Extension used to determine reader, default: None (=auto)
+        input_filename (str):    Filename with wind turbine location data
+        ext (str):               Extension used to determine reader, default: None(=auto)
+        rename_rules (str|dict): Rename rules to rename columns in read data
 
     Returns:
         pandas.DataFrame with wind turbine location data
@@ -26,18 +27,25 @@ def read_locationdata_as_dataframe(
         _, ext = os.path.splitext(input_filename)
 
     if ext.lower() in ["csv", ".csv"]:
-        return read_locationdata_from_csv_as_dataframe(input_filename)
+        data = read_locationdata_from_csv_as_dataframe(input_filename)
 
-    if ext.lower() in ["json", ".json", "geojson", ".geojson"]:
-        return read_locationdata_from_geojson_as_dataframe(input_filename)
+    elif ext.lower() in ["json", ".json", "geojson", ".geojson"]:
+        data = read_locationdata_from_geojson_as_dataframe(input_filename)
 
-    if ext.lower() in ["tab", ".tab"]:
-        return read_locationdata_from_tab_as_dataframe(input_filename)
+    elif ext.lower() in ["tab", ".tab"]:
+        data = read_locationdata_from_tab_as_dataframe(input_filename)
 
-    if ext.lower() in ["txt", ".txt"]:
-        return read_locationdata_from_txt_as_dataframe(input_filename)
+    elif ext.lower() in ["txt", ".txt"]:
+        data = read_locationdata_from_txt_as_dataframe(input_filename)
 
-    return None
+    else:
+        data = None
+
+    # Apply rename rules (if applicable)
+    if data is not None:
+        data = data.rename(columns=parse_rename_rules(rename_rules))
+
+    return data
 
 
 def read_locationdata_from_txt_as_dataframe(input_filename: str) -> pd.DataFrame:
@@ -120,6 +128,10 @@ def read_locationdata_from_csv_as_dataframe(input_filename: str) -> pd.DataFrame
         logger.debug(f"Read inputfile '{input_filename}' as csv-file")
         data = pd.read_csv(input_filename)
 
+        if len(data.columns) == 1:
+            # Probably a wrong separator, let Python guess a proper separator
+            data = pd.read_csv(input_filename, sep=None, engine='python')
+
         if "source" not in data.columns:
             _, data["source"] = os.path.split(input_filename)
 
@@ -175,3 +187,27 @@ def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataF
     except Exception as e:
         logger.error(f"Error reading GeoJSON file: {e}")
         logger.exception("Detailed error information:")
+
+
+def parse_rename_rules(rules: str | dict) -> dict:
+    """Parses a rename rules string to a dicationay."""
+
+    if rules is None:
+        return dict()
+
+    if isinstance(rules, dict):
+        return rules
+
+    syms = "'\" "
+    rule_dict = dict()
+
+    
+    rule_list = rules.split(",")
+    for rule in rule_list:
+        [key, value] = rule.split("=")
+        rule_dict[key.strip(syms)] = value.strip(syms)
+
+    if len(rule_dict) > 0:
+        logger.info(f"Parsed column rename rules: {rule_dict}")
+
+    return rule_dict

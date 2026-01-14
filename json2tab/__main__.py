@@ -8,6 +8,7 @@ import os
 from .json2tab import json2tab
 from .location_converters.converter import converter, supported_conversion_types
 from .location_converters.LocationMerger import location_merger
+from .location_converters.TurbineWindfarmMapper import turbine_windfarm_mapper
 from .location_converters.osm_data_fetcher import osm_data_fetcher
 from .logs import logger
 from .tools.KnmiTurbineDatabaseWriter import knmi_turbine_database_writer
@@ -156,11 +157,28 @@ def main(argv=None):
     )
 
     parser.add_argument(
+        "--map",
+        metavar="windfarm location-file, turbine location-file",
+        type=str,
+        nargs=2,
+        help="Map windfarm info onto windturbine location info",
+        default=None,
+    )
+
+    parser.add_argument(
         "--labels",
         metavar="source labels",
         type=str,
         nargs="+",
         help="Labels to specify source if not definied in files to merge",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--rename-columns",
+        metavar="rename rule",
+        type=str,
+        help="Rules to rename columns from input data before processing",
         default=None,
     )
 
@@ -233,7 +251,7 @@ def main(argv=None):
         knmi_turbine_database_writer(args.inverse, database_file)
     elif args.fetch_osm_data:
         output_filename = args.fetch_osm_data
-        osm_data_fetcher(output_filename)
+        osm_data_fetcher(output_filename, query_windturbine=True, query_windfarm=True)
     elif args.wind_turbine_location_merger:
         stamp = args.wind_turbine_location_merger[0]
         WindTurbineLocationMerger(stamp)
@@ -251,6 +269,17 @@ def main(argv=None):
             location_merger(
                 args.merge[0], args.merge[1], args.output, merge_mode=args.merge_mode
             )
+    elif args.map:
+        if args.labels and len(args.labels) > 0:
+            turbine_windfarm_mapper(
+                args.map[0],
+                args.map[1],
+                args.output,
+                source_label=args.labels[0],
+                rename_rules=args.rename_columns
+            )
+        else:
+            turbine_windfarm_mapper(args.map[0], args.map[1], args.output, rename_rules=args.rename_columns)
     elif args.location2country:
         level = int(args.location2country[3]) if len(args.location2country) > 3 else None
         l2c = Location2CountryConverter(args.location2country[0], level=level)
@@ -264,6 +293,7 @@ def main(argv=None):
             input_filenames=args.convert,
             output_filename=args.output,
             country=args.country,
+            rename_rules=args.rename_columns,
         )
 
     else:

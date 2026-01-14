@@ -6,6 +6,7 @@ from typing import Optional
 
 import pandas as pd
 
+from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
 from ..location_converters.LocationMerger import merge_turbine_data
 from ..logs import logger
@@ -37,7 +38,7 @@ def duplicate_remover(input_filename: str, output_filename: Optional[str] = None
     logger.debug(f"input filename: {backup_input_filename or input_filename}")
     logger.debug(f"output filename: {output_filename}")
 
-    df_input = pd.read_csv(input_filename)
+    df_input = read_locationdata_as_dataframe(input_filename)
     logger.info(f"Loaded {len(df_input.index)} turbines from {input_filename}")
 
     restart = True
