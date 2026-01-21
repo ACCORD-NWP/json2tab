@@ -212,9 +212,17 @@ def main(argv=None):
         "--merge-mode",
         metavar="type of merge",
         type=str,
-        choices=["combine", "enrich_first", "enrich_second"],
+        choices=["common", "enrich_first", "enrich_second", "combine"],
         help="Specify merge type to merge input files",
         default="combine",
+    )
+
+    parser.add_argument(
+        "--max-distance",
+        metavar="distance",
+        type=float,
+        help="Maximum distance (eg for mapping turbines to windfarms)",
+        default=None,
     )
 
     parser.add_argument(
@@ -270,16 +278,24 @@ def main(argv=None):
                 args.merge[0], args.merge[1], args.output, merge_mode=args.merge_mode
             )
     elif args.map:
+        max_distance = args.max_distance
         if args.labels and len(args.labels) > 0:
             turbine_windfarm_mapper(
                 args.map[0],
                 args.map[1],
                 args.output,
+                merge_mode=args.merge_mode,
                 source_label=args.labels[0],
+                max_distance=max_distance,
                 rename_rules=args.rename_columns
             )
         else:
-            turbine_windfarm_mapper(args.map[0], args.map[1], args.output, rename_rules=args.rename_columns)
+            turbine_windfarm_mapper(args.map[0], 
+                                    args.map[1], 
+                                    args.output, 
+                                    merge_mode=args.merge_mode,
+                                    max_distance=max_distance,
+                                    rename_rules=args.rename_columns)
     elif args.location2country:
         level = int(args.location2country[3]) if len(args.location2country) > 3 else None
         l2c = Location2CountryConverter(args.location2country[0], level=level)

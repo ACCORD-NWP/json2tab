@@ -10,12 +10,15 @@ from ..location_converters.country_data.flanders import flanders
 from ..location_converters.country_data.germany import germany
 from ..location_converters.country_data.italy import italy
 from ..location_converters.country_data.sweden import sweden
+from ..location_converters.country_data.united_kingdom import united_kingdom
 from ..location_converters.country_data.netherlands import netherlands
 from ..location_converters.country_data.thewindpower import thewindpower
 from ..location_converters.country_filters import (
     fix_country_offshore,
     remove_from_countries,
     select_from_countries,
+    select_onshore,
+    select_offshore,
 )
 from ..location_converters.csv_to_csv import csv_to_csv
 from ..location_converters.duplicate_remover import duplicate_remover
@@ -47,6 +50,10 @@ supported_conversion_types: List[str] = sorted(
         "germany",
         "italy",
         "sweden",
+        "uk",
+        "uk",
+        "unitedkingdom",
+        "united_kingdom",
         "twp",
         "thewindpower",
         "thewindpower.net",
@@ -57,6 +64,8 @@ supported_conversion_types: List[str] = sorted(
         "remove_duplicates",
         "select_country",
         "remove_country",
+        "select_onshore",
+        "select_offshore",
     ]
 )
 """Supported `convert_type` that the converter can process. """
@@ -143,6 +152,9 @@ def converter(
             elif convert_type == "sweden":
                 sweden(input_filename, output_filename)
 
+            elif convert_type in ["uk", "unitedkingdom", "united_kingdom"]:
+                united_kingdom(input_filename, output_filename)
+
             elif convert_type in [
                 "wf2csv",
                 "wf101_to_csv",
@@ -159,3 +171,9 @@ def converter(
 
             elif convert_type == "remove_country":
                 remove_from_countries(input_filename, output_filename, country)
+
+            elif convert_type == "select_offshore":
+                select_offshore(input_filename, output_filename)
+
+            elif convert_type == "select_onshore":
+                select_onshore(input_filename, output_filename)

@@ -48,11 +48,11 @@ def parse_model_name(model_name: str) -> dict:
         # Vestas pattern (e.g., V90, V112)
         r"(?P<manufacturer>(Vestas Onshore)|Vestas|(MHI Vestas Offshore)|(MHI Vestas)|MVOW)(\s|-)V(-|\s)?(?P<diameter>\d{2,3})(\s*-\s*(?P<power>\d+(\.\d+)?))?",
         # Enercon pattern (e.g., E40, E82, E101)
-        r"(?P<manufacturer>Enercon)( E)?(-|\s)?(?P<diameter>\d{2,3})( EP\d)?( E\d)?( (?P<power>\d+(\.\d+)?))?(\s?/\s?(?P<powerOW>\d+)\.?(?P<diameter2>\d+)?)?",
+        r"(?P<manufacturer>Enercon)(-|\s)(E(-|\s)?)?(?P<diameter>\d{2,3})( EP\d)?( E\d)?( (?P<power>\d+(\.\d+)?))?(\s?/\s?(?P<powerOW>\d+)\.?(?P<diameter2>\d+)?)?",
         # Match AN Bonus  (eg AN Bonus  450/36), Bonus (eg Bonus 37/450, Bonus B39/500  | and Bonus (Bonus-76-2.0) and Gamesa G49-2.0 before Siemens-Gamesa
-        r"(?P<manufacturer>AN((-|\s)Bonus)?) (?P<powerKW>\d+(\.\d+)?)/(?P<diameter>\d+)",
+        r"(?P<manufacturer>AN((-|\s)Bonus)?) (AN\s?)?(?P<powerKW>\d+(\.\d+)?)(/(?P<diameter>\d+))?",
         r"(?P<manufacturer>Bonus|Combi) (?P<diameter>\d+)/(?P<powerKW>\d+(\.\d+)?)",
-        r"(?P<manufacturer>Gamesa|Bonus)(\s|-)(G|B)?(-|\s)?(?P<diameter>\d+)([-|/](?P<power>\d+(\.\d+)?))?",
+        r"(?P<manufacturer>Gamesa|Bonus)(\s|-)(G|B)?(-|\s)?(?P<diameter>\d+)([-|/](?P<power>\d+(\.\d+)?))?(\s?(?P<known_unit>(kW)|(MW)))?",
         # Siemens / Gamesa / Siemens-Gamesa pattern (e.g., SWT-3.6-120)
         r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT)\s?(SWT|SG|G)?((-|\s)?(DD-(?P<power>\d+(\.\d+)?)))-(?P<diameter>\d+)",
         r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT)\s?(SWT|SG|G)?((-|\s)?(DD|(D?(?P<power>\d+(\.\d+)?))))?-(?P<diameter>\d+)?",
@@ -76,7 +76,7 @@ def parse_model_name(model_name: str) -> dict:
         # Reference turbines  (eg REF-6.0, REF-8.0)
         r"(?P<manufacturer>REF)(\s|-)(?P<powerMW>\d+(\.\d)?)",
         # Nordex (eg Nordex N131/3300, Nordex N149/4.0-4.5, Nordex N149/5.X, Nordex N90)
-        r"(?P<manufacturer>Nordex) N(?P<diameter>\d+)((/(?P<power>\d+(\.(\d+|X|x))?))(-\d(\.\d+)?)?)?",
+        r"(?P<manufacturer>Nordex|Sudwind|Suedwind|Südwind) (N|S)(\s|-)?(?P<diameter>\d+)((/(?P<power>\d+(\.(\d+|X|x))?))(-\d(\.\d+)?)?)?",
         # Tacke (eg Tacke TW 1.5i)
         r"(?P<manufacturer>Tacke)\s+(TW|WR|TZ)\s?(?P<power>\d+(\.\d+))[a-z]+",
         # BARD pattern (eg BARD  6.5, BARD  VM)
@@ -103,8 +103,12 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>Envision) (EN|N) (?P<diameter>\d+)-(?P<power>\d+(\.\d+)?)",
         # IWT pattern (eg IWT  V90 )
         r"(?P<manufacturer>IWT)\s+V(?P<diameter>\d+)",
+        # THYmøllen pattern (eg THYmøllen TWP40-10 )
+        r"(?P<manufacturer>(THY møllen( Aps)?)|THYmøllen|THY) TWP(-|\s)?(?P<swept_area>\d+)-(?P<powerKW>\d+(\.\d+)?)",
         # Seewind pattern (eg Seewind  S 52 750 )
         r"(?P<manufacturer>Seewind) (S\s?)?(?P<diameter>\d+)(\s|/)(?P<powerKW>\d+)",
+        # DWP pattern (eg DWP D150/22 )
+        r"(?P<manufacturer>DWP|(Windpower D)) D?\s?(?P<powerKW>\d+)(/(?P<diameter>\d+))?",
         # Kleinwind pattern (eg Kleinwind GmbH  Schachner Windrad SW10 )
         r"(?P<manufacturer>(Kleinwind GmbH)|Kleinwind)( Schachner Windrad)? SW(?P<powerKW>\d+(\.\d+)?)",
         # Windtec pattern (eg Windtec  WT1566 )
@@ -121,6 +125,8 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>BestWatt)\s+(BW|WB)(?P<powerKW>\d+)",
         # KVA Vind models, e.g. KVA Vind  6-10
         r"(?P<manufacturer>KVA Vind)(\s+KVA( Vind))? (?P<diameter>\d+)-(?P<powerKW>\d+)",
+        # Vindsyssel VS 150
+        r"(?P<manufacturer>Vind-Syssel|Vindsyssel|Vendsyssel) VS\s?(?P<powerKW>\d+)((-|-s|/)(?P<diameter>\d+))?",
         # Gaia  eg, 133-11kW lattice tower
         r"(?P<manufacturer>Gaia|(Gaia Wind)) (?P<swept_area>\d+)-(?P<powerKW>\d+)(\s?kW)?",
         # RRB Enery, eg RRB Energy  V27-225
@@ -198,8 +204,16 @@ def parse_model_name(model_name: str) -> dict:
             if manufacturer in ["NEG-Micon", "AN-Bonus"]:
                 manufacturer = manufacturer.replace("-", " ")
 
+            swap_power_diameter = False
             try:
-                power = match.group("power")
+                known_unit = match.group("known_unit")
+                if known_unit is not None and match.group("power") is None and match.group("diameter") is not None:
+                    swap_power_diameter = True
+            except (ValueError, IndexError, TypeError):
+                pass
+
+            try:
+                power = match.group("power") if not swap_power_diameter else match.group("diameter")
 
                 with contextlib.suppress(ValueError, TypeError):
                     power = float(power)
@@ -264,7 +278,7 @@ def parse_model_name(model_name: str) -> dict:
                 pass
 
             try:
-                diameter_str = match.group("diameter")
+                diameter_str = match.group("diameter") if not swap_power_diameter else match.group("power")
                 if diameter_str == "Twelve":
                     diameter = 12
                 else:
@@ -320,14 +334,29 @@ def parse_model_name(model_name: str) -> dict:
 
             if (
                 manufacturer is not None
-                and diameter is not None
                 and power is not None
-                and manufacturer.upper() in ["NEG MICON", "NEG-MICON"]
+                and diameter is not None
+                and manufacturer.upper()
+                in [x.upper() for x in ["Micon", "NEG", "NEG-Micon", "NEG Micon"]]
                 and diameter > power
             ):
-                # Swap power and diameter for some NEG MICON turbine types
-                # as they seem to be less consistent
-                diameter, power = power, diameter
+                # Micon states sweep area in stead of diameter, correct for this
+                area = diameter
+                radius = math.sqrt(area / math.pi)
+                diameter = 2 * radius
+
+            if (
+                manufacturer is not None
+                and manufacturer.upper() in 
+                [x.upper() for x in ["NEG", "NEG-Micon", "NEG Micon"]]
+            ):
+                # Check if we need to swap power and diameter for some NEG MICON 
+                # turbine types as they seem to be less consistent
+                if ((diameter is not None and power is not None and diameter > power) or
+                    (diameter is not None and power is None and diameter > 150)):
+                    diameter, power = power, diameter
+
+
 
             if (
                 manufacturer is not None
@@ -340,6 +369,18 @@ def parse_model_name(model_name: str) -> dict:
                 # The power field is a mix of power and diameter; split the two
                 power, diameter = divmod(power, 100)
                 power *= 100
+
+            if (
+                manufacturer is not None
+                and diameter is not None
+                and power is None
+                and manufacturer.upper()
+                in [x.upper() for x in ["Sudwind", "Suedwind", "Südwind"]]
+                and diameter > 100
+            ):
+                # The diameter field is a mix of diameter and power; split the two
+                diameter, power = divmod(diameter, 100)
+                power *= 10
 
             try:
                 parsed_unit = match.group("known_unit")

@@ -6,7 +6,7 @@ from typing import Optional
 import pandas as pd
 
 from ...io.writers import save_dataframe
-from ...location_converters.LocationMerger import datarow_to_turbine
+from ...turbine_utils import datarow_to_turbine
 from ...logs import logger
 
 

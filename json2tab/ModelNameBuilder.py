@@ -51,6 +51,7 @@ def ensure_manufacturer_prefix(model_name: str) -> str:
         (r"^NTK\s?\d+/\d+", "Nordtank"),
         (r"^MWT(-|\s)?\d+", "Mitsubishi"),
         (r"^SG(-|\s)D?\d+", "Siemens Gamesa"),
+        (r"^AN(-|\s)?\d+", "AN Bonus"),
         (r"^AW(-|\s)?\d+", "Acciona"),
         (r"^DW(-|\s)?\d+", "DirectWind"),
         (r"^EN(-|\s)?\d+", "Envision"),

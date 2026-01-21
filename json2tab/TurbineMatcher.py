@@ -11,6 +11,7 @@ from tabulate import tabulate
 from .DefaultTurbineSelector import DefaultTurbineSelector
 from .DimensionLocationMapper import DimensionLocationMapper
 from .logs import logger
+from .ModelNameParser import parse_model_name
 from .ModelDesignationDeriver import ModelDesignationDeriver
 from .ProbabilisticMapper import ProbabilisticMapper
 from .TurbineLocationManager import TurbineLocationManager
@@ -58,6 +59,7 @@ class TurbineMatcher:
         self.match_generated = None
         self.model_designation_key = model_designation_key
         self.matched_line_index_key = matched_line_index_key
+        self.used_matcher_key = "MatchedBy"
 
         self.match_cache = {}
 
@@ -252,6 +254,8 @@ class TurbineMatcher:
                 turbines.loc[idx, "hub_height"] = height
                 turbines.loc[idx, self.model_designation_key] = model_designation
                 turbines.loc[idx, self.matched_line_index_key] = matched_line_index or no_match_idx
+                if self.used_matcher_key is not None:
+                    turbines.loc[idx, self.used_matcher_key] = used_matcher
 
                 country = turbine.get("country")
                 if country not in counter_per_country:
@@ -373,6 +377,12 @@ class TurbineMatcher:
         manufacturer = empty_to_none(turbine.get("manufacturer"))
         turbine_type = empty_to_none(turbine.get("type"))
 
+        if isinstance(manufacturer, str):
+            manufacturer = manufacturer.strip("?")
+
+        if isinstance(turbine_type, str):
+            turbine_type = turbine_type.strip("?")
+
         lon = turbine.get("longitude")
         lat = turbine.get("latitude")
         country = turbine.get("country")
@@ -399,9 +409,13 @@ class TurbineMatcher:
         extended_type = None
         if turbine_type is not None and isinstance(manufacturer, str):
             parts = manufacturer.split(" ")
-            if len(parts) > 0 and not turbine_type.lower().startswith(parts[0].lower()):
+
+            man_code = parts[0] if len(parts) > 0 else ""
+            man_code += f" {parts[1]}" if len(parts) > 1 else ""
+
+            if len(parts) > 0 and not turbine_type.lower().startswith(man_code.lower()):
                 # Extend turbine_type with manufacturer info
-                extended_type = f"{parts[0]} {turbine_type}"
+                extended_type = f"{man_code} {turbine_type}"
 
         # [Option 2]: Check if this turbine can implement the extended turbine_type
         if extended_type is not None and extended_type in self.match_cache:
@@ -483,6 +497,73 @@ class TurbineMatcher:
                     matched_line_index,
                     "DatabaseLookup(TurbineType)",
                 )
+            
+            # [Option 3b] Extended turbine_type-based model_designation detection via enriched
+            if extended_type is not None:
+                extended_type_parse_data = parse_model_name(extended_type)
+                if extended_type_parse_data["is_known_manufacturer"]:
+                    extended_type_enriched = self.model_designation_deriver.enrich_model_designation(extended_type, additional_data=turbine)
+                    if extended_type_enriched != extended_type:
+                        (
+                            model_designation,
+                            matched_line_index,
+                            _,
+                        ) = self.model_designation_deriver.by_turbine_type(
+                            extended_type_enriched, row_data=turbine
+                        )
+
+                        if model_designation and self.tower_implements_turbine_type(
+                            turbine, matched_line_index
+                        ):
+                            # Found realistic match
+                            logger.info(
+                                f"Model designation is set to '{model_designation}' "
+                                f"(via turbine_type='{extended_type_enriched}' and "
+                                f"'{extended_type}'; from '{turbine_type}') "
+                                "by ModelDesignationDeriver "
+                                "(by enriched manufacturer+turbine_type) "
+                                f"(match found in dataframe on index={matched_line_index})."
+                            )
+
+                            self.add_to_cache([extended_type_enriched, extended_type, turbine_type], model_designation, matched_line_index)
+                            return (
+                                model_designation,
+                                matched_line_index,
+                                "DatabaseLookup(EnrichedTurbineType)",
+                            )
+                ...
+
+            # [Option 4b]: Pure turbine_type-based model_designation detection
+            turbine_type_parse_data = parse_model_name(turbine_type)
+            if turbine_type_parse_data["is_known_manufacturer"]:
+                turbine_type_enriched = self.model_designation_deriver.enrich_model_designation(turbine_type, additional_data=turbine)
+                if turbine_type_enriched != turbine_type:
+                    (
+                        model_designation,
+                        matched_line_index,
+                        _,
+                    ) = self.model_designation_deriver.by_turbine_type(
+                        turbine_type_enriched, row_data=turbine
+                    )
+
+                    if model_designation and self.tower_implements_turbine_type(
+                        turbine, matched_line_index
+                    ):
+                        # Found realistic match
+                        logger.info(
+                            f"Model designation is set to '{model_designation}' "
+                            f"(via turbine_type='{turbine_type_enriched}'; "
+                            f"from '{turbine_type}') "
+                            f"by ModelDesignationDeriver (by enriched turbine_type) "
+                            f"(match found in dataframe on index={matched_line_index})."
+                        )
+
+                        self.add_to_cache([turbine_type_enriched, turbine_type], model_designation, matched_line_index)
+                        return (
+                            model_designation,
+                            matched_line_index,
+                            "DatabaseLookup(EnrichedTurbineType)",
+                        )
 
         # [Option 5]: Use the dimension/location mapper to get a guess for turbine_type
         turbine_type_guess = self.dimension_location_mapper.map(turbine)
@@ -579,4 +660,11 @@ class TurbineMatcher:
 
         # Final option: discard this turbine
         logger.error(f"Cannot find turbine type for turbine at {tag_str} with {props}.")
+
+        if turbine_type is not None:
+            logger.warning(f"Did you missed model name parsing rules for turbine_type='{turbine_type}'?")
+
+        if extended_type is not None:
+            logger.warning(f"Did you missed model name parsing rules for extended_type='{extended_type}'?")
+
         return None, None, "NotMatched"

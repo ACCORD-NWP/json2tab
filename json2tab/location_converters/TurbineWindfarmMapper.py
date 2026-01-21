@@ -11,13 +11,15 @@ from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
 from .get_lat_lon_matrix import get_lat_lon_matrix
 from ..logs import logger, logging
-from ..location_converters.LocationMerger import standarize_dataframe, merge_turbine_data
+from ..turbine_utils import standarize_dataframe, merge_turbine_data
 
+from ..location_converters.MergeStrategy import MergeStrategy
 
 def turbine_windfarm_mapper(
     windfarm_file: str,
     turbine_file: str,
     output_file: str,
+    merge_mode: Optional[MergeStrategy | str] = MergeStrategy.Combine,
     source_label: Optional[str] = None,
     rename_rules: Optional[str|dict] = None,
     max_distance: Optional[float] = None,
@@ -42,10 +44,16 @@ def turbine_windfarm_mapper(
         if remaining_turbine_file is None:
             remaining_turbine_file = f"{base_output}.remaining_turbines.csv"
 
+    if isinstance(merge_mode, str):
+        merge_mode = MergeStrategy.from_string(merge_mode)
+
+    if merge_mode is None:
+        merge_mode = MergeStrategy.Combine
+
     print(
         f"Windturbine to windfarm mapper "
         f"{windfarm_file} (windfarms) + {turbine_file} (turbines) "
-        f"-> {output_file} (turbines)"
+        f"-> {output_file}  (merge_mode = {merge_mode})"
     )
 
     if merged_file is not None:
@@ -69,14 +77,14 @@ def turbine_windfarm_mapper(
     df_windfarms = standarize_dataframe(df_windfarms).dropna(axis='columns', how='all')
     df_turbines = standarize_dataframe(df_turbines)
 
-    df_combined_turbines, turbines, df_windfarms, df_turbines = apply(df_windfarms, df_turbines, source_label=source_label, max_distance=max_distance, merged_file=merged_file, remaining_windfarm_file=remaining_windfarm_file, remaining_turbine_file=remaining_turbine_file)
+    df_combined_turbines, turbines, df_windfarms, df_turbines = apply(df_windfarms, df_turbines, source_label=source_label, merge_mode=merge_mode, max_distance=max_distance, merged_file=merged_file, remaining_windfarm_file=remaining_windfarm_file, remaining_turbine_file=remaining_turbine_file)
 
     logger.info(f"Merged dataframe contains {len(df_combined_turbines.index)} turbine lines.")
     save_dataframe(df_combined_turbines, output_file)
     
 
 
-def apply(df_windfarms, df_turbines, source_label, max_distance=None, merged_file=None, remaining_windfarm_file=None, remaining_turbine_file=None):
+def apply(df_windfarms, df_turbines, source_label, max_distance=None, merge_mode=MergeStrategy.Combine, merged_file=None, remaining_windfarm_file=None, remaining_turbine_file=None):
     """Apply the actual windfarm to turbine mapping."""
 
     if max_distance is None:
@@ -190,8 +198,21 @@ def apply(df_windfarms, df_turbines, source_label, max_distance=None, merged_fil
     df_windfarms = df_windfarms.drop([key_wf_idx], axis=1)
     df_windfarms = df_windfarms[df_windfarms[key_n_wt] > 0]
 
-    df_combined_turbines = pd.concat(
-        [pd.DataFrame(turbines), df_windfarms, df_turbines]
-    )
+    if merge_mode == MergeStrategy.Intersect:
+        df_combined_turbines = pd.DataFrame(turbines)
+    elif merge_mode == MergeStrategy.EnrichSet1:
+        df_combined_turbines = pd.concat(
+            [pd.DataFrame(turbines), df_windfarms]
+        )
+    elif merge_mode == MergeStrategy.EnrichSet2:
+        df_combined_turbines = pd.concat(
+            [pd.DataFrame(turbines), df_turbines]
+        )
+    elif merge_mode == MergeStrategy.Combine:
+        df_combined_turbines = pd.concat(
+            [pd.DataFrame(turbines), df_windfarms, df_turbines]
+        )
+    else:
+        df_combined_turbines = pd.DataFrame()
 
     return df_combined_turbines, turbines, df_windfarms, df_turbines

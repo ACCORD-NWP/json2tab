@@ -6,7 +6,7 @@ import pandas as pd
 
 from ..io.readers import read_locationdata_from_csv_as_dataframe, parse_rename_rules
 from ..io.writers import generate_output_filename, save_dataframe
-from ..location_converters.LocationMerger import standarize_dataframe
+from ..turbine_utils import standarize_dataframe
 from ..logs import logger
 
 

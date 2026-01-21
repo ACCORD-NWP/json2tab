@@ -10,8 +10,8 @@ import geopandas as gpd
 import pandas as pd
 
 from ...io.writers import save_dataframe
+from ...turbine_utils import datarow_to_turbine
 from ...location_converters.LocationMerger import (
-    datarow_to_turbine,
     get_nearest_turbine,
     merge_dataframes,
     merge_turbine_data,
