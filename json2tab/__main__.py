@@ -8,8 +8,8 @@ import os
 from .json2tab import json2tab
 from .location_converters.converter import converter, supported_conversion_types
 from .location_converters.LocationMerger import location_merger
-from .location_converters.TurbineWindfarmMapper import turbine_windfarm_mapper
 from .location_converters.osm_data_fetcher import osm_data_fetcher
+from .location_converters.TurbineWindfarmMapper import turbine_windfarm_mapper
 from .logs import logger
 from .tools.KnmiTurbineDatabaseWriter import knmi_turbine_database_writer
 from .tools.Location2CountryConverter import Location2CountryConverter
@@ -287,15 +287,17 @@ def main(argv=None):
                 merge_mode=args.merge_mode,
                 source_label=args.labels[0],
                 max_distance=max_distance,
-                rename_rules=args.rename_columns
+                rename_rules=args.rename_columns,
             )
         else:
-            turbine_windfarm_mapper(args.map[0], 
-                                    args.map[1], 
-                                    args.output, 
-                                    merge_mode=args.merge_mode,
-                                    max_distance=max_distance,
-                                    rename_rules=args.rename_columns)
+            turbine_windfarm_mapper(
+                args.map[0],
+                args.map[1],
+                args.output,
+                merge_mode=args.merge_mode,
+                max_distance=max_distance,
+                rename_rules=args.rename_columns,
+            )
     elif args.location2country:
         level = int(args.location2country[3]) if len(args.location2country) > 3 else None
         l2c = Location2CountryConverter(args.location2country[0], level=level)

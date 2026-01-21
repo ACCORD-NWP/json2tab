@@ -207,13 +207,21 @@ def parse_model_name(model_name: str) -> dict:
             swap_power_diameter = False
             try:
                 known_unit = match.group("known_unit")
-                if known_unit is not None and match.group("power") is None and match.group("diameter") is not None:
+                if (
+                    known_unit is not None
+                    and match.group("power") is None
+                    and match.group("diameter") is not None
+                ):
                     swap_power_diameter = True
             except (ValueError, IndexError, TypeError):
                 pass
 
             try:
-                power = match.group("power") if not swap_power_diameter else match.group("diameter")
+                power = (
+                    match.group("power")
+                    if not swap_power_diameter
+                    else match.group("diameter")
+                )
 
                 with contextlib.suppress(ValueError, TypeError):
                     power = float(power)
@@ -278,7 +286,11 @@ def parse_model_name(model_name: str) -> dict:
                 pass
 
             try:
-                diameter_str = match.group("diameter") if not swap_power_diameter else match.group("power")
+                diameter_str = (
+                    match.group("diameter")
+                    if not swap_power_diameter
+                    else match.group("power")
+                )
                 if diameter_str == "Twelve":
                     diameter = 12
                 else:
@@ -345,25 +357,31 @@ def parse_model_name(model_name: str) -> dict:
                 radius = math.sqrt(area / math.pi)
                 diameter = 2 * radius
 
-            if (
-                manufacturer is not None
-                and manufacturer.upper() in 
-                [x.upper() for x in ["NEG", "NEG-Micon", "NEG Micon"]]
-            ):
-                # Check if we need to swap power and diameter for some NEG MICON 
+            if manufacturer is not None and manufacturer.upper() in [
+                x.upper() for x in ["NEG", "NEG-Micon", "NEG Micon"]
+            ]:
+                # Check if we need to swap power and diameter for some NEG MICON
                 # turbine types as they seem to be less consistent
-                if ((diameter is not None and power is not None and diameter > power) or
-                    (diameter is not None and power is None and diameter > 150)):
+                if (diameter is not None and power is not None and diameter > power) or (
+                    diameter is not None and power is None and diameter > 150
+                ):
                     diameter, power = power, diameter
-
-
 
             if (
                 manufacturer is not None
                 and power is not None
                 and diameter is None
                 and manufacturer.upper()
-                in [x.upper() for x in ["WTN Wind TechnikNord", "Wind TechnikNord", "WindTechnikNord", "WTN", "Windtec"]]
+                in [
+                    x.upper()
+                    for x in [
+                        "WTN Wind TechnikNord",
+                        "Wind TechnikNord",
+                        "WindTechnikNord",
+                        "WTN",
+                        "Windtec",
+                    ]
+                ]
                 and power % 10 != 0
             ):
                 # The power field is a mix of power and diameter; split the two

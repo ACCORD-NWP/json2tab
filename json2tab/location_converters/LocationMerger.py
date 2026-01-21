@@ -5,16 +5,15 @@ import time
 from typing import List, Optional, Tuple
 
 import pandas as pd
-
 from scipy.spatial import KDTree
 
 from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
 from ..location_converters.get_lat_lon_matrix import get_lat_lon_matrix
+from ..location_converters.MergeStrategy import MergeStrategy
 from ..logs import logger, logging
 from ..Turbine import Turbine
-from ..turbine_utils import merge_turbine_data, datarow_to_turbine
-from ..location_converters.MergeStrategy import MergeStrategy
+from ..turbine_utils import datarow_to_turbine, merge_turbine_data
 
 
 def location_merger(
@@ -145,7 +144,7 @@ def location_merger(
     if merge_mode in [MergeStrategy.EnrichSet1, MergeStrategy.Intersect]:
         file2_unique = []
         df_file2_unique = None
-    
+
     if merge_mode in [MergeStrategy.EnrichSet2, MergeStrategy.Intersect]:
         file1_unique = []
         df_file1_unique = None
@@ -157,7 +156,7 @@ def location_merger(
 
     logger.info(f"Merged dataframe contains {len(df_combined_turbines.index)} turbines.")
     save_dataframe(df_combined_turbines, output_file)
-    
+
 
 def merge_dataframes(
     df_file1: pd.DataFrame,

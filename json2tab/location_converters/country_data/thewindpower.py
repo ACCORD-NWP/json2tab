@@ -5,16 +5,17 @@ from typing import Optional
 
 import pandas as pd
 
-from ...io.writers import save_dataframe
-from ...turbine_utils import datarow_to_turbine
-from ...logs import logger
 from ...io.readers import parse_rename_rules
+from ...io.writers import save_dataframe
+from ...logs import logger
+from ...turbine_utils import datarow_to_turbine
+
 
 def thewindpower(
     input_filename: str,
     output_filename: Optional[str] = None,
     label_source: Optional[str] = None,
-    rename_rules: Optional[str|dict] = None
+    rename_rules: Optional[str | dict] = None,
 ) -> pd.DataFrame:
     """Converter to generate windfarm location file from TheWindPower.net data."""
     if output_filename is None:
@@ -27,7 +28,9 @@ def thewindpower(
         _, label_source = os.path.split(input_filename)
     logger.info(f"Set source-field for {input_filename} to '{label_source}'")
 
-    data = pd.read_excel(input_filename, header=[0, 1], sheet_name="Windfarms", na_values="#ND")
+    data = pd.read_excel(
+        input_filename, header=[0, 1], sheet_name="Windfarms", na_values="#ND"
+    )
 
     data.columns = data.columns.droplevel(1)
     data.columns = data.columns.str.strip()
@@ -35,8 +38,10 @@ def thewindpower(
     # Apply rename rules
     data = data.rename(columns=parse_rename_rules(rename_rules))
 
-    data = data[(data["Status"] == "Production") | 
-                ((data["Status"] == "Dismantled") & ~pd.isnull(data["Decommissioning date"]))]
+    data = data[
+        (data["Status"] == "Production")
+        | ((data["Status"] == "Dismantled") & ~pd.isna(data["Decommissioning date"]))
+    ]
 
     if "source" not in data:
         data["source"] = label_source

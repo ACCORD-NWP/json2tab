@@ -17,7 +17,7 @@ from ..logs import logger
 
 
 def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool = True):
-    """Get matrix with two columns containing lat and lon for all turbines in data
+    """Get matrix with two columns containing lat and lon for all turbines in data.
 
     Args:
         data: DataFrame containing wind turbine data
@@ -48,9 +48,11 @@ def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool 
         if isinstance(data["geometry"], str) and shapely is not None:
             geo_data = data
             geo_data["geometry"] = shapely.from_wkt(data["geometry"])
-        elif isinstance(data["geometry"], pd.Series) and isinstance(
-            data["geometry"].iloc[0], str
-        ) and gpd is not None:
+        elif (
+            isinstance(data["geometry"], pd.Series)
+            and isinstance(data["geometry"].iloc[0], str)
+            and gpd is not None
+        ):
             geometry = gpd.GeoSeries.from_wkt(data["geometry"])
             geo_data = gpd.GeoDataFrame(data, geometry=geometry)
         else:

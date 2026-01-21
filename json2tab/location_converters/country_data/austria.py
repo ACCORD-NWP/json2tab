@@ -4,22 +4,23 @@ Input data based on IG windkraft windrad karte.
 Website: https://www.igwindkraft.at/aktuelles/windrad-karte
 """
 
+import contextlib
 import json
 import os
 import re
 from typing import Optional
-import contextlib
 
 import pandas as pd
 
 try:
     import requests
-except (ImportError):
+except ImportError:
     requests = None
 
 from ...io.writers import save_dataframe
 from ...logs import logger, logging
 from ...Turbine import Turbine
+
 
 def austria(
     input_filename: str,
@@ -27,22 +28,19 @@ def austria(
     label_source: Optional[str] = None,
 ) -> pd.DataFrame:
     """Converter to generate wind turbine location files for Austria."""
-
     turbine_json = None
     if input_filename.lower().startswith(("http://", "https://", "www.igwindkraft.at")):
         # Load data directly from igwindkraft website
         turbine_json = get_igwindkraft_windrad_karte(input_filename)
         if label_source is None:
             label_source = "IG Windkraft Windradlandkarte"
-        
+
         if turbine_json is not None:
             input_filename = "igwindkraft-windrad-karte.json"
 
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(Exception), open(input_filename, "w") as dump_file:
                 # Dump the fetched data to a file
-                with open(input_filename, "w") as dump_file:
-                    dump_file.write(turbine_json)
-        
+                dump_file.write(turbine_json)
 
     if output_filename is None:
         input_filename_base = os.path.splitext(input_filename)[0]
@@ -54,7 +52,6 @@ def austria(
         _, label_source = os.path.split(input_filename)
     logger.info(f"Set source-field for {input_filename} to '{label_source}'")
 
-
     data = None
     if turbine_json is None:
         with open(input_filename, "r") as input_file:
@@ -62,16 +59,15 @@ def austria(
     else:
         data = json.loads(turbine_json)
 
-
     if data is not None:
         turbines = []
         skipped_turbines = []
-        for _, properties_list in data.items():
+        for properties_list in data.values():
             idx = 0
             for properties in properties_list:
                 idx += 1
 
-                id = properties["id"]
+                prop_id = properties["id"]
 
                 lon = properties["x"]
                 try:
@@ -87,7 +83,6 @@ def austria(
                 except (ValueError, TypeError):
                     pass
 
-
                 rated_power = properties["mweinzeln"]
                 try:
                     if isinstance(rated_power, float):
@@ -98,25 +93,19 @@ def austria(
                 except (ValueError, TypeError):
                     pass
 
-
                 facilityInfo = properties["facilityInfo"]
 
                 n_turbines = 1
                 match = re.search(r"(?P<n_turbines>\d+) Anlage(n)", facilityInfo)
                 if match:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         n_turbines = int(match.group("n_turbines"))
-                    except (ValueError, TypeError):
-                        pass
 
                 start_date = None
                 match = re.search(r"errichtet: (?P<start_year>\d+)", facilityInfo)
                 if match:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         start_date = int(match.group("start_year"))
-                    except (ValueError, TypeError):
-                        pass
-
 
                 typeInfo = properties["typeInfo"].split("<br>")
                 match = re.search(r"Type: (?P<man>[^,]*), (?P<type>.*)", typeInfo[0])
@@ -130,11 +119,9 @@ def austria(
                 hub_height = None
                 match = re.search(r"Nabenh.*he: (?P<hub_height>\d+)", typeInfo[1])
                 if match:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         hub_height = float(match.group("hub_height"))
-                    except (ValueError, TypeError):
-                        pass
-                
+
                 diameter = None
                 radius = None
                 match = re.search(r"Rotordurchmesser: (?P<diameter>\d+)", typeInfo[1])
@@ -145,11 +132,10 @@ def austria(
                     except (ValueError, TypeError):
                         pass
 
-                
                 project = properties["project"]
 
                 turbine = Turbine(
-                    id = id,
+                    id=prop_id,
                     turbine_id=idx,
                     latitude=lat,
                     longitude=lon,
@@ -157,22 +143,24 @@ def austria(
                     country="Austria",
                     source=label_source,
                     hub_height=hub_height,
-                    power_rating= rated_power,
+                    power_rating=rated_power,
                     radius=radius,
                     diameter=diameter,
-                    manufacturer = manufacturer,
-                    type = turbine_type,
-                    wind_farm = project,
-                    n_turbines = n_turbines,
-                    start_date = start_date,
-                    is_offshore = False
+                    manufacturer=manufacturer,
+                    type=turbine_type,
+                    wind_farm=project,
+                    n_turbines=n_turbines,
+                    start_date=start_date,
+                    is_offshore=False,
                 )
-
 
                 if lat is not None and lon is not None:
                     turbines.append(turbine)
                 else:
-                    logger.warning(f"Skipped turbine {turbine.name} (id={turbine.id}) due to invalid lat/lon.")
+                    logger.warning(
+                        f"Skipped turbine {turbine.name} (id={turbine.id}) "
+                        "due to invalid lat/lon."
+                    )
                     skipped_turbines.append(turbine)
 
         data = pd.DataFrame(turbines)
@@ -180,14 +168,16 @@ def austria(
 
         logger.warning(f"Skipped {len(skipped_turbines)} turbines")
         if len(skipped_turbines) > 0 and logger.getEffectiveLevel() <= logging.DEBUG:
-            save_dataframe(pd.DataFrame(skipped_turbines), f"{output_filename}.skipped.csv")
-        
+            save_dataframe(
+                pd.DataFrame(skipped_turbines), f"{output_filename}.skipped.csv"
+            )
+
         return data
+    return None
 
 
 def get_igwindkraft_windrad_karte(url: str) -> str:
     """Gets the json-string with windturbine data from igwindkraft website."""
-
     if requests is not None:
         logger.info(f"Fetch windturbine data from {url}")
         windrad_karte = requests.get(url).text
@@ -198,6 +188,6 @@ def get_igwindkraft_windrad_karte(url: str) -> str:
             return parts[0]
 
     else:
-        logger.error(f"Python module requests not loaded, so no web requests possible.")
-        
+        logger.error("Python module requests not loaded, so no web requests possible.")
+
     return None

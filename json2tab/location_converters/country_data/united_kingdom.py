@@ -1,15 +1,15 @@
 """Converter to generate wind turbine location files for United Kingdom."""
 
-import os
 import math
+import os
 from typing import Optional
 
-import pandas as pd
 import geopandas as gpd
+import pandas as pd
 
 from ...io.writers import save_dataframe
-from ...turbine_utils import datarow_to_turbine
 from ...logs import logger
+from ...turbine_utils import datarow_to_turbine
 
 
 def united_kingdom(
@@ -31,17 +31,22 @@ def united_kingdom(
     data = pd.read_excel(input_filename, sheet_name="REPD")
 
     # Filter to only windfarms
-    data = data[(data["Technology Type"] == "Wind Offshore") | (data["Technology Type"] == "Wind Onshore")]
+    data = data[
+        (data["Technology Type"] == "Wind Offshore")
+        | (data["Technology Type"] == "Wind Onshore")
+    ]
 
     # Filter to only operational and decommissioned windfarms
-    data = data[(data["Development Status"] == "Operational") | (data["Development Status"] == "Decommissioned")]
+    data = data[
+        (data["Development Status"] == "Operational")
+        | (data["Development Status"] == "Decommissioned")
+    ]
 
     if "source" not in data:
         data["source"] = label_source
 
     x = data["X-coordinate"].to_numpy().tolist()
     y = data["Y-coordinate"].to_numpy().tolist()
-
 
     geometry = gpd.points_from_xy(x, y, crs="EPSG:27700")
     geo_data = gpd.GeoDataFrame(data, geometry=geometry)
@@ -51,19 +56,19 @@ def united_kingdom(
 
     logger.debug(f"Loaded {len(geo_data.index)} turbines")
 
-
-    renames = {"Operator (or Applicant)": "operator",
-               "Site Name": "name",
-               "Installed Capacity (MWelec)": "Installed capacity [MW]",
-               "Turbine Capacity": "rated_power_mw",
-               "No. of Turbines": "n_turbines",
-               "Height of Turbines (m)": "hub_height",
-               "Operational": "start_date",
-               "Ref ID": "turbine_id",
-               "Record Last Updated (dd/mm/yyyy)": "end_date"
-               }
+    renames = {
+        "Operator (or Applicant)": "operator",
+        "Site Name": "name",
+        "Installed Capacity (MWelec)": "Installed capacity [MW]",
+        "Turbine Capacity": "rated_power_mw",
+        "No. of Turbines": "n_turbines",
+        "Height of Turbines (m)": "hub_height",
+        "Operational": "start_date",
+        "Ref ID": "turbine_id",
+        "Record Last Updated (dd/mm/yyyy)": "end_date",
+    }
     geo_data = geo_data.rename(columns=renames)
-    
+
     geo_data.loc[geo_data["Development Status"] == "Operational", "end_date"] = None
 
     turbines = []

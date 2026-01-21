@@ -1,13 +1,10 @@
 """Basic utils to process dataframe and Turbine-data."""
 
-"""Module for advanched wind turbine location merger."""
-
 import contextlib
 import math
 from typing import Optional
 
 import pandas as pd
-
 
 from .location_converters.get_lat_lon_matrix import get_lat_lon_matrix
 from .logs import logger
@@ -27,6 +24,7 @@ def standarize_dataframe(data: pd.DataFrame, always: bool = False) -> pd.DataFra
 
     Args:
         data (pandas.DataFrame): The dataframe containing turbine information
+        always: Flag indicating converting is done, even when all columns are mappable
 
     Returns:
         pandas.DataFrame with standarized turbine information
@@ -100,7 +98,7 @@ def merge_turbine_data(
         alternative_used,
     )
 
-    if name2 is not None and not(isinstance(name2, float) and math.isnan(name2)):
+    if name2 is not None and not (isinstance(name2, float) and math.isnan(name2)):
         if str(name2).lower().startswith(str(name).lower()):
             name = name2
         else:
@@ -215,7 +213,7 @@ def merge_turbine_data(
                 "Name",
                 "naam",
                 "Location",
-                "Projekteringsområde"
+                "Projekteringsområde",
             ],
             source if isinstance(source, dict) else source.to_dict(),
             default=default,
@@ -249,9 +247,11 @@ def merge_turbine_data(
             if n_turbines > 0:
                 rated_power = power_to_kw(installed_power / n_turbines)
             else:
-                logger.warning(f"Installed power is provided for windfarm '{wind_farm}' "
-                               f"but n_turbines={n_turbines}; "
-                               "so the rated_power for this windfarm is ignored")
+                logger.warning(
+                    f"Installed power is provided for windfarm '{wind_farm}' "
+                    f"but n_turbines={n_turbines}; "
+                    "so the rated_power for this windfarm is ignored"
+                )
 
     start_date, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
@@ -263,7 +263,7 @@ def merge_turbine_data(
                 "year",
                 "Date of original connection to grid",
                 "Uppfört",
-                "Commissioning date"
+                "Commissioning date",
             ],
             source if isinstance(source, dict) else source.to_dict(),
             default,
@@ -355,7 +355,11 @@ def merge_turbine_data(
 
     # Parse is_offshore field
     if is_offshore is not None:
-        if isinstance(is_offshore, str) and is_offshore.lower() in ["zee", "hav", "vatten"]:
+        if isinstance(is_offshore, str) and is_offshore.lower() in [
+            "zee",
+            "hav",
+            "vatten",
+        ]:
             is_offshore = True
         elif isinstance(is_offshore, str) and is_offshore.lower() in ["land"]:
             is_offshore = False
@@ -418,4 +422,3 @@ def fetch_data(
         alternative_used = alternative_used or (output not in ignored_values)
 
     return output, alternative_used
-

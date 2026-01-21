@@ -9,16 +9,16 @@ from ..location_converters.country_data.finland import finland
 from ..location_converters.country_data.flanders import flanders
 from ..location_converters.country_data.germany import germany
 from ..location_converters.country_data.italy import italy
-from ..location_converters.country_data.sweden import sweden
-from ..location_converters.country_data.united_kingdom import united_kingdom
 from ..location_converters.country_data.netherlands import netherlands
+from ..location_converters.country_data.sweden import sweden
 from ..location_converters.country_data.thewindpower import thewindpower
+from ..location_converters.country_data.united_kingdom import united_kingdom
 from ..location_converters.country_filters import (
     fix_country_offshore,
     remove_from_countries,
     select_from_countries,
-    select_onshore,
     select_offshore,
+    select_onshore,
 )
 from ..location_converters.csv_to_csv import csv_to_csv
 from ..location_converters.duplicate_remover import duplicate_remover
@@ -76,7 +76,7 @@ def converter(
     input_filenames: str | List[str],
     output_filename: Optional[str] = None,
     country: Optional[str | List[str]] = None,
-    rename_rules: Optional[str|dict] = None
+    rename_rules: Optional[str | dict] = None,
 ):
     """Entry point for different converters.
 
@@ -102,11 +102,26 @@ def converter(
     elif convert_type == "osm":
         osm_data_fetcher(output_filename, input_filenames[0])
     elif convert_type == "osm_windturbine":
-        osm_data_fetcher(output_filename, input_filenames[0], query_windturbine=True, query_windfarm=False)
+        osm_data_fetcher(
+            output_filename,
+            input_filenames[0],
+            query_windturbine=True,
+            query_windfarm=False,
+        )
     elif convert_type == "osm_windfarm":
-        osm_data_fetcher(output_filename, input_filenames[0], query_windturbine=False, query_windfarm=True)
+        osm_data_fetcher(
+            output_filename,
+            input_filenames[0],
+            query_windturbine=False,
+            query_windfarm=True,
+        )
     elif convert_type == "osm_windturbine_windfarm":
-        osm_data_fetcher(output_filename, input_filenames[0], query_windturbine=True, query_windfarm=True)
+        osm_data_fetcher(
+            output_filename,
+            input_filenames[0],
+            query_windturbine=True,
+            query_windfarm=True,
+        )
 
     else:
         # Only support for explicit output argument if converter converts a single file
@@ -123,7 +138,9 @@ def converter(
                 "tab_to_csv",
                 "txt2csv" "txt_to_csv",
             ]:
-                convert_between_csv_geojson(input_filename, output_filename, rename_rules=rename_rules)
+                convert_between_csv_geojson(
+                    input_filename, output_filename, rename_rules=rename_rules
+                )
 
             elif convert_type in ["csv2csv", "csv_to_csv"]:
                 csv_to_csv(input_filename, output_filename, rename_rules=rename_rules)

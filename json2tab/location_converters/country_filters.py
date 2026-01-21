@@ -56,7 +56,9 @@ def select_from_countries(
 
     logger.info(f"Selecting turbines in {', '.join(map(str, countries))}")
 
-    selector = lambda data: data["country"].isin(countries)
+    def selector(data):
+        return data["country"].isin(countries)
+
     return select_turbines(input_filename, output_filename, selector)
 
 
@@ -79,13 +81,13 @@ def remove_from_countries(
 
     logger.info(f"Selecting turbines not in {', '.join(map(str, countries))}")
 
-    selector = lambda data: ~(data["country"].isin(countries))
+    def selector(data):
+        return ~data["country"].isin(countries)
+
     return select_turbines(input_filename, output_filename, selector)
 
 
-def select_offshore(
-    input_filename: str, output_filename: str
-) -> pd.DataFrame:
+def select_offshore(input_filename: str, output_filename: str) -> pd.DataFrame:
     """Converter to select offshore wind turbines from windturbine location file.
 
     Args:
@@ -95,15 +97,15 @@ def select_offshore(
     Returns:
         pandas.DataFrame with offshore wind turbines
     """
-
     logger.info("Selecting offshore wind turbines.")
 
-    selector = lambda data: data["is_offshore"]
+    def selector(data):
+        return data["is_offshore"]
+
     return select_turbines(input_filename, output_filename, selector)
 
-def select_onshore(
-    input_filename: str, output_filename: str
-) -> pd.DataFrame:
+
+def select_onshore(input_filename: str, output_filename: str) -> pd.DataFrame:
     """Converter to select onshore wind turbines from windturbine location file.
 
     Args:
@@ -113,17 +115,15 @@ def select_onshore(
     Returns:
         pandas.DataFrame with onshore wind turbines
     """
-
     logger.info("Selecting onshore wind turbines.")
 
-    selector = lambda data: ~(data["is_offshore"])
+    def selector(data):
+        return ~data["is_offshore"]
+
     return select_turbines(input_filename, output_filename, selector)
 
 
-
-def select_turbines(
-    input_filename: str, output_filename: str, selector
-) -> pd.DataFrame:
+def select_turbines(input_filename: str, output_filename: str, selector) -> pd.DataFrame:
     """Converter to select wind turbines from windturbine location file in a country.
 
     Args:
@@ -134,7 +134,6 @@ def select_turbines(
     Returns:
         pandas.DataFrame with wind turbines that are selected by the selector
     """
-
     data = read_locationdata_as_dataframe(input_filename)
 
     data_filtered = data[selector(data)]
@@ -154,4 +153,3 @@ def select_turbines(
     save_dataframe(data_filtered, output_filename)
 
     return data_filtered
-

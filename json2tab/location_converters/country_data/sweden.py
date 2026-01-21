@@ -10,8 +10,8 @@ import geopandas as gpd
 import pandas as pd
 
 from ...io.writers import save_dataframe
-from ...turbine_utils import datarow_to_turbine
 from ...logs import logger
+from ...turbine_utils import datarow_to_turbine
 
 
 def sweden(
@@ -49,9 +49,11 @@ def sweden(
 
     logger.debug(f"Loaded {len(geo_data.index)} turbines")
 
-    geo_data = geo_data[(geo_data["Status"] == "Nedmonterat") | 
-                        (geo_data["Status"] == "Uppfört") | 
-                        (~pd.isnull(geo_data["Uppfört"]))]
+    geo_data = geo_data[
+        (geo_data["Status"] == "Nedmonterat")
+        | (geo_data["Status"] == "Uppfört")
+        | (~pd.isna(geo_data["Uppfört"]))
+    ]
 
     logger.debug(f"Loaded {len(geo_data.index)} real turbines")
 

@@ -73,7 +73,7 @@ def zero_to_none(data: float) -> float:
     """
     if data is None:
         return data
-    
+
     try:
         if not isinstance(data, float):
             data = float(data)
@@ -137,7 +137,7 @@ def get_float_from_dict(
         require_positive: Flag indicating if match should be positive
 
     Returns:
-        output:   A valid (not None, empty or NaN) float value of data[key] 
+        output:   A valid (not None, empty or NaN) float value of data[key]
                   for key in keys, otherwise default
         key:      The matched key
     """
@@ -307,10 +307,12 @@ def get_height(specs: Dict | List[Dict], default: float = 0.0) -> float:
     ]
 
     if isinstance(specs, list):
-        height, _ = get_float_from_dict_list(fields, specs, default, require_positive=True)
+        height, _ = get_float_from_dict_list(
+            fields, specs, default, require_positive=True
+        )
     else:
         height, _ = get_float_from_dict(fields, specs, default, require_positive=True)
-    
+
     return height
 
 

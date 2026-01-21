@@ -11,7 +11,9 @@ from ..Turbine import Turbine
 
 
 def read_locationdata_as_dataframe(
-    input_filename: str, ext: Optional[str] = None, rename_rules: Optional[str|dict] = None
+    input_filename: str,
+    ext: Optional[str] = None,
+    rename_rules: Optional[str | dict] = None,
 ) -> pd.DataFrame:
     """Reads dataframe with wind turbine location data from a file.
 
@@ -72,7 +74,7 @@ def read_locationdata_from_txt_as_dataframe(input_filename: str) -> pd.DataFrame
                 "country",
             ],
         )
-        
+
         data["wf101_type"] = "FO_" + data["wf101_type"].astype(str)
 
         if "source" not in data.columns:
@@ -130,7 +132,7 @@ def read_locationdata_from_csv_as_dataframe(input_filename: str) -> pd.DataFrame
 
         if len(data.columns) == 1:
             # Probably a wrong separator, let Python guess a proper separator
-            data = pd.read_csv(input_filename, sep=None, engine='python')
+            data = pd.read_csv(input_filename, sep=None, engine="python")
 
         if "source" not in data.columns:
             _, data["source"] = os.path.split(input_filename)
@@ -191,17 +193,15 @@ def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataF
 
 def parse_rename_rules(rules: str | dict) -> dict:
     """Parses a rename rules string to a dicationay."""
-
     if rules is None:
-        return dict()
+        return {}
 
     if isinstance(rules, dict):
         return rules
 
     syms = "'\" "
-    rule_dict = dict()
+    rule_dict = {}
 
-    
     rule_list = rules.split(",")
     for rule in rule_list:
         [key, value] = rule.split("=")

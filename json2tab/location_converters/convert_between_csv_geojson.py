@@ -13,14 +13,14 @@ from ..logs import logger
 def convert_between_csv_geojson(
     input_filename: str,
     output_filename: Optional[str] = None,
-    rename_rules: Optional[str|dict] = None,
+    rename_rules: Optional[str | dict] = None,
 ) -> pd.DataFrame:
     """Converter to convert windturbine location file between csv- and geojson-format.
 
     Args:
         input_filename:  csv or geojson file to windturbine location data from
         output_filename: (Optional) geojson or csv file to write turbine location data
-        rename_rules     Rename rules to rename columns in read data
+        rename_rules:    Rename rules to rename columns in read data
 
     Returns:
         pandas.DataFrame with csv file data

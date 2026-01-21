@@ -328,7 +328,9 @@ class ModelDesignationDeriver:
         turbine_types = self.turbine_type_manager.get_specs_dataframe(filtered)
 
         # Remove all FO_00000 types, so enriching cannot introduce wf101-types
-        turbine_types = turbine_types[~(turbine_types["model_designation"].str.match(r"FO_\d+", na=False))]
+        turbine_types = turbine_types[
+            ~(turbine_types["model_designation"].str.match(r"FO_\d+", na=False))
+        ]
 
         filter_string = ""
         if manufacturer_pattern:
@@ -383,16 +385,16 @@ class ModelDesignationDeriver:
             for thresshold in [3, 1]:
                 # Match on the integer-values of the diameter
                 turbine_types_prep = turbine_types[
-                    abs(turbine_types["diameter"].astype(float) - float(diameter)) < thresshold
+                    abs(turbine_types["diameter"].astype(float) - float(diameter))
+                    < thresshold
                 ]
 
                 if len(turbine_types_prep) > 0:
                     turbine_types = turbine_types_prep
                     stricter_filter = thresshold
-            
+
             if stricter_filter is not None:
                 filter_string += f"diameter = {diameter} +/- {stricter_filter}, "
-        
 
         if len(turbine_types) > 1 and power and power > 0 and exact_power_match:
             thresshold = (float(power) / 750) / 100
@@ -456,7 +458,7 @@ class ModelDesignationDeriver:
                 additional_data_dict = additional_data
                 if not isinstance(additional_data_dict, dict):
                     additional_data_dict = additional_data_dict.to_dict()
-                    
+
                 logger.debug(
                     f"Found {len(modes)} possible model_designations; "
                     f"all are most frequent in database based on parameters "

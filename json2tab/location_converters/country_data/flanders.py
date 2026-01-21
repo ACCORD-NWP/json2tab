@@ -10,8 +10,8 @@ import geopandas as gpd
 import pandas as pd
 
 from ...io.writers import save_dataframe
-from ...turbine_utils import datarow_to_turbine
 from ...logs import logger
+from ...turbine_utils import datarow_to_turbine
 from ..cleanup_short_distance_turbines import cleanup_short_distance_turbines
 
 

@@ -11,7 +11,7 @@ def get_wf101_manufacturer(MAN_CODE: int) -> str:
         MANUFACTURER as human readable manufacturer name (or None)
     """
     MANUFACTURER = None
-
+    # fmt: off
     if ( MAN_CODE ==  0 ): MANUFACTURER = "Senvion-Repower/Jacobs/HSW Husum/Kenersys"
     if ( MAN_CODE ==  1 ): MANUFACTURER = "VESTAS ONSHORE"
     if ( MAN_CODE ==  2 ): MANUFACTURER = "NORDEX"
@@ -53,6 +53,6 @@ def get_wf101_manufacturer(MAN_CODE: int) -> str:
     if ( MAN_CODE ==  3 ): MANUFACTURER = "GE General Electric"
     if ( MAN_CODE ==  6 ): MANUFACTURER = "Siemens"
     if ( MAN_CODE == 43 ): MANUFACTURER = "Kleinwind GmbH"
-    
+    # fmt: on
 
     return MANUFACTURER

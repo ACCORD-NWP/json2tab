@@ -55,5 +55,7 @@ def save_dataframe(
         elif ext.lower() in ["json", ".json", "geojson", ".geojson"]:
             save_dataframe_as_geojson(dataframe, output_filename)
         else:
-            logger.warning(f"Could not derive valid output format for extension {ext}. "
-                           "No file written.")
+            logger.warning(
+                f"Could not derive valid output format for extension {ext}. "
+                "No file written."
+            )

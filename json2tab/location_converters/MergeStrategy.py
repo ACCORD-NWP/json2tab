@@ -1,7 +1,10 @@
+"""Module for merge strategy for manage merging of locations."""
+
 from enum import Enum
 
+
 class MergeStrategy(Enum):
-    """Merge strategy used in the advanched location merger."""
+    """Merge strategy used in location merger / windfarm turbine merger."""
 
     """ Combine data from both sources. """
     Combine = 0
@@ -49,4 +52,3 @@ class MergeStrategy(Enum):
             return MergeStrategy.Intersect
 
         return None
-

@@ -76,7 +76,7 @@ class TurbineTypeTabFileWriter:
         frequency = matched_turbines[key].value_counts()
         type_idx_list = frequency.index.get_level_values(key).to_list()
         frequency_list = frequency[type_idx_list]
-            
+
         data = {
             "Type index": type_idx_list,
             "Manufacterer": [],
@@ -101,9 +101,11 @@ class TurbineTypeTabFileWriter:
                     specs = self.write_specs_file(matched_line_index, filename)
                 else:
                     specs = {"model_designation": "No turbine type matched"}
-                    logger.warning("Skipped writing turbine type tab file for "
-                                  f"type_index = {type_index}; "
-                                  "no valid model designation found")
+                    logger.warning(
+                        "Skipped writing turbine type tab file for "
+                        f"type_index = {type_index}; "
+                        "no valid model designation found"
+                    )
 
                 model_designation = specs.get("model_designation")
                 manufacturer = specs.get("manufacturer")

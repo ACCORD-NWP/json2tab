@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from json2tab.tools.Location2CountryConverter import Location2CountryConverter
@@ -7,6 +9,12 @@ EEZ_BORDER_FILE = "static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp"
 GADM_NETHERLANDS_FILE = "static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg"
 
 
+@pytest.mark.skipif(
+    not Path(COUNTRY_BORDER_FILE).is_file(), reason="Country land border file not found"
+)
+@pytest.mark.skipif(
+    not Path(EEZ_BORDER_FILE).is_file(), reason="Country EEZ border file not found"
+)
 @pytest.mark.parametrize(
     ("country_border_file", "lon", "lat", "expected"),
     [
@@ -30,6 +38,9 @@ def test_country_borders_iso3(country_border_file, lon, lat, expected):
     assert country == expected
 
 
+@pytest.mark.skipif(
+    not Path(GADM_NETHERLANDS_FILE).is_file(), reason="Netherlands border file not found"
+)
 @pytest.mark.parametrize(
     ("country_border_file", "lon", "lat", "expected"),
     [
@@ -51,6 +62,12 @@ def test_netherlands_iso3(country_border_file, lon, lat, expected):
         assert country == expected[level]
 
 
+@pytest.mark.skipif(
+    not Path(COUNTRY_BORDER_FILE).is_file(), reason="Country land border file not found"
+)
+@pytest.mark.skipif(
+    not Path(EEZ_BORDER_FILE).is_file(), reason="Country EEZ border file not found"
+)
 @pytest.mark.parametrize(
     ("country_border_file", "lon", "lat", "expected"),
     [
@@ -74,6 +91,9 @@ def test_country_borders_name(country_border_file, lon, lat, expected):
     assert country == expected
 
 
+@pytest.mark.skipif(
+    not Path(GADM_NETHERLANDS_FILE).is_file(), reason="Netherlands border file not found"
+)
 @pytest.mark.parametrize(
     ("country_border_file", "lon", "lat", "expected"),
     [
