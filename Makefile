@@ -197,6 +197,9 @@ euromap:
 
 	echo "=== REMOVE TEMP FILES ==="
 	rm generated_database/*.csv.orig
+
+	echo "=== COMPRESS DATABASE TO TAR FILE ==="
+	tar -czvf euromap$(shell date +%Y%m%d).tar.gz euromap_$(shell date +%Y%m%d).csv euromap_$(shell date +%Y%m%d).geojson
 	
 location2country:
 	json2tab --debug=1 --location2country static_data/worldmap/country_borders/countries.geojson 2.9772590 51.6698336    # B331_D03, Borssele III, https://www.openstreetmap.org/node/7677766593

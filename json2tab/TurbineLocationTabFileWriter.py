@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pandas as pd
-from tabulate import tabulate
 
+from .io.write_statistics import write_statistics
 from .logs import logger
 from .TurbineMatcher import TurbineMatcher
 from .utils import get_height, get_radius, get_rated_power_kw, print_processing_status
@@ -281,13 +281,11 @@ class TurbineLocationTabFileWriter:
 
         stats = pd.DataFrame(data=data)
         stats = stats.sort_values(by=["Total installed capacity (MW)"], ascending=False)
-        table = tabulate(stats, headers="keys", tablefmt="psql", showindex=False)
+
+        table = None
+        with contextlib.suppress(Exception):
+            filename = self.config["output"]["files"].get("installed_capacity")
+            table = write_statistics(stats, output_dir, filename)
 
         header_str = "Installed capacity summary: \n\n"
         print(f"\n\n{header_str}{table}")
-
-        with contextlib.suppress(Exception):
-            stats.to_csv(output_dir / "installed_capacity.csv", index=False)
-
-            with open(output_dir / "installed_capacity.txt", "w") as file:
-                file.write(table)

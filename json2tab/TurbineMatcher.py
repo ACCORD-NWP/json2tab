@@ -6,10 +6,11 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pandas as pd
-from tabulate import tabulate
 
 from .DefaultTurbineSelector import DefaultTurbineSelector
 from .DimensionLocationMapper import DimensionLocationMapper
+from .io.write_statistics import inject_suffix_in_filename, write_statistics
+from .io.writers import generate_output_filename
 from .logs import logger
 from .ModelDesignationDeriver import ModelDesignationDeriver
 from .ModelNameParser import parse_model_name
@@ -63,6 +64,10 @@ class TurbineMatcher:
         self.match_cache = {}
 
         self.output_dir = Path(config["output"]["directory"])
+        self.matching_summary_file = config["output"]["files"].get("matching_summary")
+        self.write_matching_summary_per_country = config["output"]["files"].get(
+            "matching_summary_per_country", False
+        )
 
         try:
             self.forbidden_types = config["matcher"]["forbidden_types"]
@@ -328,41 +333,49 @@ class TurbineMatcher:
                 hits_per_country[country].append(value)
                 percent_per_country[f"{country} (%)"].append(percent)
 
-            stats = pd.DataFrame(data=details)
-            stats = stats.sort_values(by=["Percentage (%)"], ascending=False)
+            filename = inject_suffix_in_filename(
+                self.matching_summary_file, f"_{country}"
+            )
+            if isinstance(self.write_matching_summary_per_country, str):
+                ext = self.write_matching_summary_per_country
+                if filename is not None and len(filename) > 0:
+                    filename = generate_output_filename(filename, ext)
+                    self.write_matching_summary_per_country = True
+                else:
+                    self.write_matching_summary_per_country = False
 
-            table_str = tabulate(stats, headers="keys", tablefmt="psql", showindex=False)
-            matching_summary = (
-                f"Matching Summary (total towers matched in {country}: {total}):"
-                f"\n\n{table_str}"
+            if self.write_matching_summary_per_country:
+                stats = pd.DataFrame(data=details)
+                stats = stats.sort_values(by=["Percentage (%)"], ascending=False)
+
+                with contextlib.suppress(Exception):
+                    write_statistics(
+                        stats,
+                        self.output_dir,
+                        filename,
+                        header=f"Matching Summary "
+                        f"(total towers matched in {country}: {total}):\n\n",
+                    )
+
+        header = f"Matching Summary (total towers matched: {total}):\n\n"
+        print(header)
+
+        for datasource, sort_key, suffix in [
+            (hits_per_country, "Total", "_hits"),
+            (percent_per_country, "Total (%)", "_percent"),
+        ]:
+            stats = pd.DataFrame(data=datasource).sort_values(
+                by=[sort_key], ascending=False
             )
 
-            with contextlib.suppress(Exception), open(
-                self.output_dir / f"matching_summary_{country}.txt", "w"
-            ) as file:
-                file.write(matching_summary)
+            txt_tbl = write_statistics(
+                stats,
+                self.output_dir,
+                inject_suffix_in_filename(self.matching_summary_file, suffix),
+                header=header,
+            )
 
-        matching_summary = f"Matching Summary (total towers matched: {total}):"
-
-        for datasource, sort_key in [
-            (hits_per_country, "Total"),
-            (percent_per_country, "Total (%)"),
-        ]:
-            stats = pd.DataFrame(data=datasource)
-            stats = stats.sort_values(by=[sort_key], ascending=False)
-            table_str = tabulate(stats, headers="keys", tablefmt="psql", showindex=False)
-
-            matching_summary += f"\n\n{table_str}"
-
-        print(f"\n{matching_summary}")
-
-        with contextlib.suppress(Exception):
-            with open(self.output_dir / "matching_summary.txt", "w") as file:
-                file.write(matching_summary)
-
-            hits = pd.DataFrame(data=hits_per_country)
-            hits = hits.sort_values(by=["Total"], ascending=False)
-            hits.to_csv(self.output_dir / "matching_summary.csv", index=False)
+            print(f"{txt_tbl}\n\n")
 
     def match_model_designation_on_turbine(self, turbine) -> Tuple[str, int, str]:
         """Gets the model_designation for a given turbine tower.

@@ -1,14 +1,13 @@
 """Module that handles generation of turbine type tab files for wind turbine data."""
 
-import contextlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pandas as pd
-from tabulate import tabulate
 
 from .AutoIncrementTypeIndexGenerator import AutoIncrementTypeIndexGenerator
+from .io.write_statistics import inject_suffix_in_filename, write_statistics
 from .logs import logger
 from .TurbineCurveLoader import get_cp_ct_power_curves
 from .TurbineMatcher import TurbineMatcher
@@ -53,6 +52,10 @@ class TurbineTypeTabFileWriter:
         self.data_range = type_spec.get("windspeed_range", "cut-in:0.5:cut-out")
         self.extend_to_35ms = type_spec.get("extend_to_35ms", False)
         self.bypass_cutout = type_spec.get("bypass_cutout", False)
+
+        self.model_designation_statistics_filename = config["output"]["files"].get(
+            "model_designation_statistics"
+        )
 
         self.date_generated = date_generated
 
@@ -130,28 +133,29 @@ class TurbineTypeTabFileWriter:
 
         # Dump statistics data
         stats = pd.DataFrame(data=data)
-        stats_capa = stats.sort_values(by=["Installed capacity (MW)"], ascending=False)
-        stats_freq = stats.sort_values(by=["Frequency"], ascending=False)
+        tbl = write_statistics(
+            stats.sort_values(by=["Installed capacity (MW)"], ascending=False),
+            output_dir,
+            inject_suffix_in_filename(
+                self.model_designation_statistics_filename, "_capacity"
+            ),
+        )
 
-        tbl_capa = tabulate(stats_capa, headers="keys", tablefmt="psql", showindex=False)
-        tbl_freq = tabulate(stats_freq, headers="keys", tablefmt="psql", showindex=False)
+        write_statistics(
+            stats.sort_values(by=["Frequency"], ascending=False),
+            output_dir,
+            inject_suffix_in_filename(
+                self.model_designation_statistics_filename, "_frequency"
+            ),
+        )
 
         header_str = (
             "Model designation statistics; "
             f"total assigned model designation: {len(type_idx_list)}.\n\n"
         )
-        print(f"\n\n{header_str}{tbl_capa}")
+        print(f"\n\n{header_str}{tbl}")
 
-        with contextlib.suppress(Exception):
-            stats_filename = "model_designation_statistics"
-            stats.to_csv(output_dir / f"{stats_filename}.csv", index=False)
-            with open(output_dir / f"{stats_filename}_capacity.txt", "w") as file:
-                file.write(f"{header_str}{tbl_capa}")
-
-            with open(output_dir / f"{stats_filename}_frequency.txt", "w") as file:
-                file.write(f"{header_str}{tbl_freq}")
-
-        return stats_capa
+        return stats
 
     def write_specs_file(self, matched_line_index: int, filename: str) -> dict:
         """Write turbine type specifications to tab file with power curves.

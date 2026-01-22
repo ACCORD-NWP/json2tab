@@ -42,11 +42,7 @@ def save_dataframe(
     if formats is None:
         _, formats = os.path.splitext(filename)
 
-    if formats.startswith(".[") and formats.endswith("]"):
-        formats = formats[2:-1].split(",")
-
-    if not isinstance(formats, list):
-        formats = [formats]
+    formats = parse_ext_string_to_list(formats)
 
     for ext in formats:
         output_filename = generate_output_filename(filename, ext)
@@ -59,3 +55,14 @@ def save_dataframe(
                 f"Could not derive valid output format for extension {ext}. "
                 "No file written."
             )
+
+
+def parse_ext_string_to_list(formats: str) -> List[str]:
+    """Parses extensions like .[csv,txt] as a list of extensions."""
+    if formats.startswith(".[") and formats.endswith("]"):
+        formats = formats[2:-1].split(",")
+
+    if not isinstance(formats, list):
+        formats = [formats]
+
+    return formats

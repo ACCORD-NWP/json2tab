@@ -4,34 +4,32 @@
 # Input data configuration
 input:
   # Main GeoJSON file containing turbine locations
-  turbine_locations: "wind_turbines_012025.geojson"
+  turbine_locations: "generated_database/euromap.csv"
   
-  # Optional: Database with turbine specifications
+  
+  # Optional: (List of/) Database(s) with turbine specifications
   turbine_database: 
-      - "turbine_database+gened_ct_curves.json"
+      - "static_data/turbine_database+gened_ct_curves.json"
       - "static_data/turbine_database+knmi.json"
       - "static_data/turbine_database+wf101.json"
       - "static_data/turbine_specifications+belgian.csv"
-      - "static_data/known_knmi_mapping.csv"
       - "static_data/known_wf101_mapping.csv"
-      #- "merged_turbine_specifications.csv" # (not needed anymore)
-
-
-  # NOTE: turbine_specs IS DEPREICATED, CAN BE ADDED AS ADITIONAL ITEM TO turbine_database
-  #turbine_specs: "{DEPREICATED}"
 
 
 # Subsetting configuration
 subsetting:
+  # Filter turbines in temporal domain with installation/decommissioning date; possible values: a valid date, "today" (default) or "all"
+  situation_date: "today"
+
   # Method can be either "bbox" (bounding box) or "domain" (TOML-based domain)
-  method: "domain"
+  method: "bbox"
   
   # Bounding box configuration (used if method: "bbox")
   bbox:
-    - -2   # min_longitude
-    - 50.  # min_latitude
-    - 3.5   # max_longitude
-    - 52  # max_latitude
+    - -25.0   # min_longitude
+    - 35      # min_latitude
+    - 40      # max_longitude
+    - 72      # max_latitude
   
   # Domain configuration (used if method: "domain")
   domain:
@@ -46,27 +44,44 @@ subsetting:
     nimax: 1489
     njmax: 1489
 
-# Settings for turbine matching and processing
-settings:
-  fallback_thresholds:
-    diameter_threshold: 20.0
-    hubheight_weight: 1.0
-    diameter_weight: 3.0
-    turbine_type_weight: 2.0
-    power_weight: 1.0
-    location_weight: 1.0
-    height_weight: 2.0
+  # Country configuration (used if method: "country")
+  country:
+  # Mode to easy toggle between different country border regions (allowed values: eez, country, provincie, gemeente)
+    mode: "eez"
+    files:
+      eez: "static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp"
+      country: "static_data/worldmap/country_borders/countries.geojson"
+      provincie: "static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg"
+      gemeente: "static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg"
+    levels:
+      provincie: 1
+      gemeente: 2
+    selected_countries:
+      - "Netherlands"
+
+# Turbine matcher configuration
+matcher:
+  use_probabilistic_mapper: false
+  use_default_selector: false
+  forbidden_types: "999;9999" #"999" # List of forbidden tubine types, i.e. turbine types that should be treated as unknown turbine types and matching logic should be applied to find correct turbine type
+
 
 # Output configuration
 output:
   # Directory for all output files
   directory: "output"
-  # Prefix for output filenames
-  prefix: "windturbines"
   # Output files configuration
   files:
+    # Output file to summarize installed capacity per country
+    installed_capacity: "installed_capacity.[csv,txt]"
+    # Output file to summarize matching summary
+    matching_summary: "matching_summary.[csv,txt]"
+    # Flag indicating if matching summary per country should be written (True/False) or ext of filetype (csv or txt)
+    matching_summary_per_country: False
+    # Output file to write model designation statistics
+    model_designation_statistics: "model_designation_statistics.[csv,txt]"
     # Filtered GeoJSON with selected turbines
-    filtered_geojson: "filtered_turbines.geojson"
+    filtered_geojson: "filtered_turbines.[geojson,csv]"
     # Visualization output
     regional_plot: "turbine_locations_regional.png"
     domain_plot: "turbine_locations_domain.png"
@@ -80,7 +95,6 @@ output:
       float_precision: 4
       default_radius: 8.0
       default_height: 25.0
-      forbidden_types: "999;9999" # List of forbidden tubine types, i.e. turbine types that should be treated as unknown turbine types and matching logic should be applied to find correct turbine type
     type_spec:
       float_precision: 4
       include_headers: true
