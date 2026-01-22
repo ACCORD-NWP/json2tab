@@ -192,6 +192,7 @@ class TurbineTypeManager:
             f"{' '.join(str(p) for p in specs_files)}"
         )
 
+        loaded_files = 0
         specs_list = []
 
         for specs_file in specs_files:
@@ -199,6 +200,7 @@ class TurbineTypeManager:
                 self.specs_files.append(specs_file)
                 specs = self._load_specs_file(specs_file)
                 specs_list.append(specs)
+                loaded_files += 1
             elif len(specs_files) == 1:
                 raise FileNotFoundError(
                     f"Turbine type specs file '{specs_file!s}' not found."
@@ -206,8 +208,14 @@ class TurbineTypeManager:
             else:
                 logger.error(
                     f"Turbine type specs file '{specs_file!s}' not found, "
-                    "multiple files provided. Let's skip this file"
+                    "multiple files provided. Let's skip this file."
                 )
+
+        if loaded_files == 0:
+            raise FileNotFoundError(
+                "All turbine type specs files "
+                f"'{' '.join(str(p) for p in specs_file)}' not found."
+            )
 
         if len(specs_list) > 0:
             specs_df = pd.concat(specs_list)

@@ -50,6 +50,9 @@ class TurbineLocationManager:
             f"{' '.join(str(p) for p in location_files)}"
         )
 
+        loaded_files = 0
+        empty_files = 0
+
         for location_file in location_files:
             if location_file.exists():
                 self.location_files.append(location_file)
@@ -58,6 +61,14 @@ class TurbineLocationManager:
                 if df_file is not None:
                     df_file = standarize_dataframe(df_file)
                     self.turbines = pd.concat([self.turbines, df_file])
+                    loaded_files += 1
+                else:
+                    logger.warning(
+                        f"Turbine location file '{location_file!s}' found "
+                        "but didn't contain any turbine."
+                    )
+                    empty_files += 1
+
             elif len(location_files) == 1:
                 raise FileNotFoundError(
                     f"Turbine location file '{location_file!s}' not found."
@@ -65,8 +76,21 @@ class TurbineLocationManager:
             else:
                 logger.error(
                     f"Turbine location file '{location_file!s}' not found, "
-                    "multiple files provided. Let's skip this file"
+                    "multiple files provided. Let's skip this file."
                 )
+
+        if loaded_files == 0:
+            if empty_files > 0:
+                raise FileNotFoundError(
+                    "Loading turbine location files "
+                    f"'{' '.join(str(p) for p in location_files)}' doesn't result in "
+                    "any data; files are not existing or doesn't contain location data."
+                )
+
+            raise FileNotFoundError(
+                "All turbine location files "
+                f"'{' '.join(str(p) for p in location_files)}' not found."
+            )
 
         # Set all nan's to None in specs table
         self.turbines = self.turbines.replace({np.nan: None})

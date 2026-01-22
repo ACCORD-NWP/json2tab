@@ -56,7 +56,7 @@ class DomainHandler:
 
             # Calculate domain size
             x_range = (float(self.config["njmax"]) - 1.0) * float(self.config["xdx"])
-            y_range = (float(self.config["nimax"]) - 1.0) * float(self.config["xdx"])
+            y_range = (float(self.config["nimax"]) - 1.0) * float(self.config["xdy"])
 
             # Calculate corners
             self._extent = (
