@@ -214,7 +214,7 @@ class TurbineTypeManager:
         if loaded_files == 0:
             raise FileNotFoundError(
                 "All turbine type specs files "
-                f"'{' '.join(str(p) for p in specs_file)}' not found."
+                f"'{' '.join(str(p) for p in specs_files)}' not found."
             )
 
         if len(specs_list) > 0:
