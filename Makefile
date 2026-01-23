@@ -20,8 +20,10 @@ osm_turbines_webapi:
 	json2tab --debug=3 --fetch-osm-data "static_data/windturbine_windfarm_locations_osm_$(shell date +%Y%m%d).[csv,geojson]"
 
 osm_turbines_local:
-	./run_overpass_query.sh db static_data/query_windturbines.overpass static_data/turbine_locations_osm_20260103.local.overpass_output.json
+	python -c "from json2tab.location_converters.overpass_query_builder import build_query; print(build_query(windturbine=True, windfarm=True))" > overpass_query.txt
+	./run_overpass_query.sh db overpass_query.txt static_data/turbine_locations_osm_20260103.local.overpass_output.json
 	json2tab --debug=3 --convert static_data/turbine_locations_osm_20260103.local.overpass_output.json --type osm --output static_data/turbine_locations_osm_20260103.csv
+	rm overpass_query.txt
 
 convert_osm_today: static_data/windturbine_windfarm_locations_osm_$(shell date +%Y%m%d).overpass_output.json
 	rm -f static_data/windturbine_windfarm_locations_osm_$(shell date +%Y%m%d).csv
@@ -35,61 +37,6 @@ convert_osm_20260114:
 	json2tab --debug=2 --convert static_data/windturbine_windfarm_locations_osm_20260114.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
 	json2tab --debug=3 --convert static_data/windturbine_windfarm_locations_osm_20260114.csv --type csv2geojson
 
-master_geojson_012025:
-	json2tab --debug=3 --wind-turbine-location-merger 012025
-
-master_geojson_20220101:
-	json2tab --debug=3 --wind-turbine-location-merger 20220101
-
-convert_netherlands:
-	json2tab --debug=3 --convert ms_data/nl/rivm_20250101_windturbines_vermogen/rivm_20250101_windturbines_vermogen.shp ms_data/nl/rws_20240101_windparken_turbines/windparken_turbinesPoint.shp --type netherlands --output static_data/netherlands_rivm+rws.geojson
-
-convert_denmark:
-	json2tab --debug=3 --convert "ms_data/dnk/Vindmølledata til 2025-01.xlsx" --type denmark --output static_data/denmark.csv
-	json2tab --debug=3 --convert static_data/denmark.csv --type csv2geojson
-
-convert_flanders:
-	json2tab --debug=3 --convert ms_data/be/er_windturb_st_aangevr/er_windturb_st_aangevr.shp --type flanders --output static_data/flanders_onshore.geojson
-
-convert_wf101:
-	json2tab --debug=3 --convert ms_data/wf101.txt --type wf2csv --output static_data/wf101.csv
-	json2tab --debug=3 --convert static_data/wf101.csv --type remove_duplicates --output static_data/wf101_wo_duplicates.csv
-	json2tab --debug=2 --convert static_data/wf101_wo_duplicates.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
-	json2tab --debug=3 --convert static_data/wf101_wo_duplicates.csv --type csv2geojson
-
-merge_flanders_belgium:
-	json2tab --debug=3 --merge static_data/flanders_onshore.csv gdrive_data/belgian_offshore_with_types.csv --labels N/A "Belgium Offshore" --output static_data/belgium.csv
-
-merge_osm_netherlands:
-	json2tab --debug=3 --merge static_data/turbine_locations_osm_20251110.csv static_data/netherlands_rivm+rws.csv --output static_data/osm+netherlands.csv
-
-fix_country:
-	json2tab --debug=2 --convert generated_database/belgium_tmp*.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
-
-select_country:
-	json2tab --debug=2 --convert generated_database/netherlands.csv --type select_country --country Netherlands Belgium Germany --output generated_database/netherlands_only.csv
-
-remove_country:
-	json2tab --debug=2 --convert generated_database/osm.csv --type remove_country --country Germany --output generated_database/osm_wo_germany.csv
-
-igwindkraft_web:
-	json2tab --debug=3 --convert https://www.igwindkraft.at/aktuelles/windrad-karte --type austria --output generated_database/austria.csv
-
-igwindkraft_from_file:
-	json2tab --debug=3 --convert ms_data/at/igwindkraft-windrad-karte.json --type austria --output generated_database/austria.csv
-
-thewindpower:
-	json2tab --debug=3 --convert ms_data/eu/TheWindPower/Windfarms_Europe_20211112.xls --type thewindpower --output generated_database/thewindpower.csv --rename-columns "Total power"="Total power [kW]"
-	json2tab --debug=2 --convert generated_database/thewindpower.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
-
-
-euromap_fix_with_twp:
-	json2tab --debug=3 --convert ms_data/eu/TheWindPower/Windfarms_Europe_20211112.xls --type thewindpower --output generated_database/thewindpower.csv --rename-columns "Total power"="Total power [kW]"
-	json2tab --debug=2 --convert generated_database/thewindpower.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
-	json2tab --debug=2 --convert generated_database/thewindpower.csv --output generated_database/thewindpower_selected_countries.csv --type select_country --country Spain Italy Poland Belgium
-	json2tab --debug=2 --convert generated_database/euromap.csv --output generated_database/euromap_selected_countries.csv --type select_country --country Spain Italy Poland Belgium
-	json2tab --debug=2 --map generated_database/thewindpower_selected_countries.csv generated_database/euromap_selected_countries.csv --output generated_database/euromap_selected_countries_twp_fixed.csv
-	json2tab --debug=2 --merge generated_database/euromap.csv generated_database/euromap_selected_countries_twp_fixed.csv --output generated_database/euromap_twp_fixed.[csv,geojson]
 
 
 euromap:
@@ -122,6 +69,7 @@ euromap:
 	json2tab --debug=2 --convert "ms_data/dnk/Vindmølledata til 2025-01.xlsx" --type denmark --output generated_database/denmark.csv
 	json2tab --debug=2 --convert ms_data/it/Italian_Wind_Farms_db.xlsx --type italy --output generated_database/italy_windfarms.csv
 	json2tab --debug=2 --convert ms_data/bg/bulgarian_wind_farms_combined.csv --type csv2csv --output generated_database/bulgarian_windfarms.csv --rename-columns power_kw=installed_power
+#	json2tab --debug=2 --convert https://www.igwindkraft.at/aktuelles/windrad-karte --type austria --output generated_database/austria_igwindkraft.csv
 	json2tab --debug=2 --convert ms_data/at/igwindkraft-windrad-karte.json --type austria --output generated_database/austria_igwindkraft.csv
 	json2tab --debug=2 --convert "ms_data/swe/VBK_export_allman_prod.xlsx" --type sweden --output generated_database/sweden.csv
 	json2tab --debug=2 --convert "ms_data/uk/REPD_Publication_Q3_2025.xlsx" --type uk --output generated_database/uk_windfarms.csv
@@ -129,8 +77,6 @@ euromap:
 #	BENCHMARK RESULTS COMPARING with WindEurope at 1-1-2025
 # 	POTENTIAL CORRECTION BY LOADING TWPnet DATA: Spain (-40% -> 0%), Italy (-16% -> +6%), Poland (-25% -> -3%), Belgium (-14% -> -4%)
 # 	NO CORRECTIONS KNOWN: Turkey (-46%), Greece (-81%), Ukraine (-84%), Lithuania (-12%), Croatia (-18%), Estonia (-14%)
-
-
 
 	echo "=== FIXING COUNTRY AND IS_OFFSHORE FLAG FOR ALL PRODUCES MS_DATA CSVs ==="
 	json2tab --debug=2 --convert generated_database/*.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
@@ -201,14 +147,11 @@ euromap:
 	echo "=== COMPRESS DATABASE TO TAR FILE ==="
 	tar -czvf euromap$(shell date +%Y%m%d).tar.gz euromap_$(shell date +%Y%m%d).csv euromap_$(shell date +%Y%m%d).geojson
 	
-location2country:
-	json2tab --debug=1 --location2country static_data/worldmap/country_borders/countries.geojson 2.9772590 51.6698336    # B331_D03, Borssele III, https://www.openstreetmap.org/node/7677766593
-	json2tab --debug=1 --location2country static_data/worldmap/country_borders/countries.geojson 2.9120371 51.6446948    # NW C-10, Northwind, https://www.openstreetmap.org/node/4756304453
-	json2tab --debug=1 --location2country static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp 2.9772590 51.6698336     # B331_D03, Borssele III, https://www.openstreetmap.org/node/7677766593
-	json2tab --debug=1 --location2country static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp 2.9120371 51.6446948     # NW C-10, Northwind, https://www.openstreetmap.org/node/4756304453
-	json2tab --debug=1 --location2country static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg 5.2591827 52.9995252 1  # Fiesland Windpark U49
-	json2tab --debug=1 --location2country static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg 3.9753655 51.9780770 1  # Maasvlakte Rotterdam
-	json2tab --debug=1 --location2country static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg 5.2591827 52.9995252 2  # Fiesland Windpark U49
-	json2tab --debug=1 --location2country static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg 5.6307759 52.6390398 2  # Zuidermeerdijk 2w Urk
-	json2tab --debug=1 --location2country static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg 3.9753655 51.9780770 2  # Maasvlakte Rotterdam
-	json2tab --debug=1 --location2country static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp 2.363421103838799 48.826341580661605
+euromap_fix_with_thewindpower:
+	json2tab --debug=3 --convert ms_data/eu/TheWindPower/Windfarms_Europe_20211112.xls --type thewindpower --output generated_database/thewindpower.csv --rename-columns "Total power"="Total power [kW]"
+	json2tab --debug=2 --convert generated_database/thewindpower.csv static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp static_data/worldmap/country_borders/countries.geojson --type fix_country_offshore
+	json2tab --debug=2 --convert generated_database/thewindpower.csv --output generated_database/thewindpower_selected_countries.csv --type select_country --country Spain Italy Poland Belgium
+	json2tab --debug=2 --convert generated_database/euromap.csv --output generated_database/euromap_selected_countries.csv --type select_country --country Spain Italy Poland Belgium
+	json2tab --debug=2 --map generated_database/thewindpower_selected_countries.csv generated_database/euromap_selected_countries.csv --output generated_database/euromap_selected_countries_twp_fixed.csv
+	json2tab --debug=2 --merge generated_database/euromap.csv generated_database/euromap_selected_countries_twp_fixed.csv --output generated_database/euromap_twp_fixed.[csv,geojson]
+

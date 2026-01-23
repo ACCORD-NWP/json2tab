@@ -1,7 +1,0 @@
-/* [out:json][date:"2025-01-01T00:00:00Z"]; */
-/* nwr["power"="generator"]["generator:source"="wind"](35.0,-25.0,72.0,40.0); */
-[out:json];
-nwr["power"="generator"]["generator:source"="wind"];
-/* get also the turbines marked as way (i.e. a list of grouped nodes) */
-(._;>;);
-out body;

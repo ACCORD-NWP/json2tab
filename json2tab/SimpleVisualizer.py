@@ -39,7 +39,7 @@ class SimpleVisualizer:
             self.config["subsetting"].get("bbox", [-180, -90, 180, 90])
         )  # Default to global extent
 
-    def create_map(self, turbines: pd.DataFrame, output_path: str):
+    def create_map_plot(self, turbines: pd.DataFrame, output_path: str):
         """Create stable visualization with proper domain boundary."""
         # Use a simple font configuration to avoid hanging
         mpl.rcParams["font.family"] = ["sans-serif"]

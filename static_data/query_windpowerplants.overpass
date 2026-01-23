@@ -1,3 +1,0 @@
-[out:json];
-nwr["power"="plant"]["plant:source"="wind"];
-out body;

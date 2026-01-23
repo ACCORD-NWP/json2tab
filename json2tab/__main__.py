@@ -358,9 +358,7 @@ def main(argv=None):
                 rename_rules=args.rename_columns,
             )
         else:
-            logger.warning(
-                "Loading converter failed; please install optional packages."
-            )
+            logger.warning("Loading converter failed; please install optional packages.")
 
     else:
         print("Run json2tab; default mode")
