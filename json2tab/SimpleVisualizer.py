@@ -1,6 +1,5 @@
 """Module for simplified visualization of wind turbine locations."""
 
-from typing import Any, Dict
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature

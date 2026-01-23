@@ -56,7 +56,6 @@ class DimensionLocationMapper:
 
     def map(self, turbine_props: Dict[str, Any]) -> Tuple[str, str]:
         """Find closest matching type with enhanced criteria and location considerations."""
-
         is_offshore = turbine_props.get("is_offshore", None)
 
         try:

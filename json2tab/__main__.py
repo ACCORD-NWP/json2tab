@@ -6,14 +6,35 @@ import importlib.metadata
 import os
 
 from .json2tab import json2tab
-from .location_converters.converter import converter, supported_conversion_types
-from .location_converters.LocationMerger import location_merger
-from .location_converters.osm_data_fetcher import osm_data_fetcher
-from .location_converters.TurbineWindfarmMapper import turbine_windfarm_mapper
+
+try:
+    from .location_converters.converter import converter, supported_conversion_types
+except ImportError:
+    converter = None
+    supported_conversion_types = []
+
+try:
+    from .location_converters.LocationMerger import location_merger
+except ImportError:
+    location_merger = None
+
+try:
+    from .location_converters.osm_data_fetcher import osm_data_fetcher
+except ImportError:
+    osm_data_fetcher = None
+
+try:
+    from .location_converters.TurbineWindfarmMapper import turbine_windfarm_mapper
+except ImportError:
+    turbine_windfarm_mapper = None
+
 from .logs import logger
 from .tools.KnmiTurbineDatabaseWriter import knmi_turbine_database_writer
-from .tools.Location2CountryConverter import Location2CountryConverter
-from .tools.WindTurbineLocationMerger import WindTurbineLocationMerger
+
+try:
+    from .tools.Location2CountryConverter import Location2CountryConverter
+except ImportError:
+    Location2CountryConverter = None
 
 # some defaults
 basedir = os.path.dirname(__file__)
@@ -30,7 +51,7 @@ def main(argv=None):
         "-c",
         metavar="filepath",
         type=str,
-        help="Path to the config file; " "Default: config.yaml",
+        help="Path to the config file; Default: config.yaml",
         default="config.yaml",
     )
 
@@ -130,108 +151,108 @@ def main(argv=None):
         default=None,
     )
 
-    parser.add_argument(
-        "--fetch-osm-data",
-        "-osm",
-        metavar="filename",
-        type=str,
-        help="Fetches windturbine location data from OpenStreetMap using Overpass API",
-        default=None,
-    )
+    if osm_data_fetcher is not None:
+        parser.add_argument(
+            "--fetch-osm-data",
+            "-osm",
+            metavar="filename",
+            type=str,
+            help="Fetch windturbine location data from OpenStreetMap using Overpass API",
+            default=None,
+        )
 
-    parser.add_argument(
-        "--wind-turbine-location-merger",
-        type=str,
-        nargs="+",
-        default=None,
-        help="Flag to start the Wind Turbine Location Merger (old implementation)",
-    )
+    if location_merger is not None:
+        parser.add_argument(
+            "--merge",
+            metavar="turbine location-files",
+            type=str,
+            nargs=2,
+            help="Merge turbine location files",
+            default=None,
+        )
 
-    parser.add_argument(
-        "--merge",
-        metavar="turbine location-files",
-        type=str,
-        nargs=2,
-        help="Merge turbine location files",
-        default=None,
-    )
+    if turbine_windfarm_mapper is not None:
+        parser.add_argument(
+            "--map",
+            metavar="windfarm location-file, turbine location-file",
+            type=str,
+            nargs=2,
+            help="Map windfarm info onto windturbine location info",
+            default=None,
+        )
 
-    parser.add_argument(
-        "--map",
-        metavar="windfarm location-file, turbine location-file",
-        type=str,
-        nargs=2,
-        help="Map windfarm info onto windturbine location info",
-        default=None,
-    )
+    if Location2CountryConverter is not None:
+        parser.add_argument(
+            "--location2country",
+            metavar="Country boarder file, lat, lon",
+            type=str,
+            nargs="+",
+            help="Get country based on lat/lon coordinates",
+            default=None,
+        )
 
-    parser.add_argument(
-        "--labels",
-        metavar="source labels",
-        type=str,
-        nargs="+",
-        help="Labels to specify source if not definied in files to merge",
-        default=None,
-    )
+    if converter is not None:
+        parser.add_argument(
+            "--convert",
+            metavar="input filename(s)",
+            type=str,
+            nargs="+",
+            help="Convert windturbine location file (combined with --type)",
+            default=None,
+        )
 
-    parser.add_argument(
-        "--rename-columns",
-        metavar="rename rule",
-        type=str,
-        help="Rules to rename columns from input data before processing",
-        default=None,
-    )
+        parser.add_argument(
+            "--type",
+            metavar="type of input file to convert",
+            type=str,
+            choices=supported_conversion_types,
+            help="Specify converter type to convert input file",
+        )
 
-    parser.add_argument(
-        "--location2country",
-        metavar="Country boarder file, lat, lon",
-        type=str,
-        nargs="+",
-        help="Get country based on lat/lon coordinates",
-        default=None,
-    )
+        parser.add_argument(
+            "--country",
+            metavar="type of merge",
+            type=str,
+            nargs="+",
+            help="Country or list of countries to select/remove from map",
+        )
 
-    parser.add_argument(
-        "--convert",
-        metavar="input filename(s)",
-        type=str,
-        nargs="+",
-        help="Convert windturbine location file to geojson file (combined with --type)",
-        default=None,
-    )
+    if converter is not None or turbine_windfarm_mapper is not None:
+        parser.add_argument(
+            "--rename-columns",
+            metavar="rename rule",
+            type=str,
+            help="Rules to rename columns from input data before processing",
+            default=None,
+        )
 
-    parser.add_argument(
-        "--type",
-        metavar="type of input file to convert",
-        type=str,
-        choices=supported_conversion_types,
-        help="Specify converter type to convert input file",
-    )
+    if location_merger is not None or turbine_windfarm_mapper is not None:
+        parser.add_argument(
+            "--labels",
+            metavar="source labels",
+            type=str,
+            nargs="+",
+            help="Labels to specify source if not definied in files to merge",
+            default=None,
+        )
 
-    parser.add_argument(
-        "--merge-mode",
-        metavar="type of merge",
-        type=str,
-        choices=["common", "enrich_first", "enrich_second", "combine"],
-        help="Specify merge type to merge input files",
-        default="combine",
-    )
+        parser.add_argument(
+            "--merge-mode",
+            metavar="type of merge",
+            type=str,
+            choices=["common", "enrich_first", "enrich_second", "combine"],
+            help="Specify merge type to merge input files",
+            default="combine",
+        )
 
-    parser.add_argument(
-        "--max-distance",
-        metavar="distance",
-        type=float,
-        help="Maximum distance (eg for mapping turbines to windfarms)",
-        default=None,
-    )
-
-    parser.add_argument(
-        "--country",
-        metavar="type of merge",
-        type=str,
-        nargs="+",
-        help="Country or list of countries to select/remove from map",
-    )
+    if turbine_windfarm_mapper is not None:
+        parser.add_argument(
+            "--max-distance",
+            metavar="distance",
+            type=float,
+            help="Maximum distance (eg for mapping turbines to windfarms)",
+            default=None,
+        )
 
     parser.add_argument("--output", metavar="output filename", type=str, default=None)
 
@@ -258,61 +279,88 @@ def main(argv=None):
         )
         knmi_turbine_database_writer(args.inverse, database_file)
     elif args.fetch_osm_data:
-        output_filename = args.fetch_osm_data
-        osm_data_fetcher(output_filename, query_windturbine=True, query_windfarm=True)
-    elif args.wind_turbine_location_merger:
-        stamp = args.wind_turbine_location_merger[0]
-        WindTurbineLocationMerger(stamp)
-    elif args.merge:
-        if args.labels and len(args.labels) == len(args.merge):
-            location_merger(
-                args.merge[0],
-                args.merge[1],
-                args.output,
-                merge_mode=args.merge_mode,
-                label_source1=args.labels[0],
-                label_source2=args.labels[1],
-            )
+        if osm_data_fetcher is not None:
+            output_filename = args.fetch_osm_data
+            osm_data_fetcher(output_filename, query_windturbine=True, query_windfarm=True)
         else:
-            location_merger(
-                args.merge[0], args.merge[1], args.output, merge_mode=args.merge_mode
+            logger.warning(
+                "Loading osm data fetcher failed; please install optional packages."
+            )
+    elif args.merge:
+        if location_merger is not None:
+            if args.labels and len(args.labels) == len(args.merge):
+                location_merger(
+                    args.merge[0],
+                    args.merge[1],
+                    args.output,
+                    merge_mode=args.merge_mode,
+                    label_source1=args.labels[0],
+                    label_source2=args.labels[1],
+                )
+            else:
+                location_merger(
+                    args.merge[0], args.merge[1], args.output, merge_mode=args.merge_mode
+                )
+        else:
+            logger.warning(
+                "Loading location merger failed; please install optional packages."
             )
     elif args.map:
-        max_distance = args.max_distance
-        if args.labels and len(args.labels) > 0:
-            turbine_windfarm_mapper(
-                args.map[0],
-                args.map[1],
-                args.output,
-                merge_mode=args.merge_mode,
-                source_label=args.labels[0],
-                max_distance=max_distance,
+        if turbine_windfarm_mapper is not None:
+            max_distance = args.max_distance
+            if args.labels and len(args.labels) > 0:
+                turbine_windfarm_mapper(
+                    args.map[0],
+                    args.map[1],
+                    args.output,
+                    merge_mode=args.merge_mode,
+                    source_label=args.labels[0],
+                    max_distance=max_distance,
+                    rename_rules=args.rename_columns,
+                )
+            else:
+                turbine_windfarm_mapper(
+                    args.map[0],
+                    args.map[1],
+                    args.output,
+                    merge_mode=args.merge_mode,
+                    max_distance=max_distance,
+                    rename_rules=args.rename_columns,
+                )
+        else:
+            logger.warning(
+                "Loading turbine windfarm mapper failed; "
+                "please install optional packages."
+            )
+
+    elif args.location2country:
+        if Location2CountryConverter is not None:
+            level = (
+                int(args.location2country[3]) if len(args.location2country) > 3 else None
+            )
+            l2c = Location2CountryConverter(args.location2country[0], level=level)
+            country = l2c.get_country(
+                float(args.location2country[1]), float(args.location2country[2])
+            )
+            print(country)
+        else:
+            logger.warning(
+                "Loading location2country converter failed; "
+                "please install optional packages."
+            )
+    elif args.convert:
+        if converter is not None:
+            converter(
+                convert_type=args.type,
+                input_filenames=args.convert,
+                output_filename=args.output,
+                country=args.country,
                 rename_rules=args.rename_columns,
             )
         else:
-            turbine_windfarm_mapper(
-                args.map[0],
-                args.map[1],
-                args.output,
-                merge_mode=args.merge_mode,
-                max_distance=max_distance,
-                rename_rules=args.rename_columns,
+            logger.warning(
+                "Loading converter failed; please install optional packages."
             )
-    elif args.location2country:
-        level = int(args.location2country[3]) if len(args.location2country) > 3 else None
-        l2c = Location2CountryConverter(args.location2country[0], level=level)
-        country = l2c.get_country(
-            float(args.location2country[1]), float(args.location2country[2])
-        )
-        print(country)
-    elif args.convert:
-        converter(
-            convert_type=args.type,
-            input_filenames=args.convert,
-            output_filename=args.output,
-            country=args.country,
-            rename_rules=args.rename_columns,
-        )
 
     else:
         print("Run json2tab; default mode")

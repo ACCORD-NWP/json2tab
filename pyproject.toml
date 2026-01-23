@@ -96,8 +96,6 @@
   extend-exclude = [
     "tools/fortran2tab",
     "json2tab/get_wf101_manufacturer.py",
-    "json2tab/tools/WindTurbineLocationMerger.py",
-    "json2tab/DefaultTurbineSelector.py",
     "json2tab/ModelNameParser.py",
     "json2tab/SimpleVisualizer.py",
     "json2tab/DimensionLocationMapper.py",
