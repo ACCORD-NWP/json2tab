@@ -10,6 +10,7 @@ from ..logs import logger
 from ..ModelNameBuilder import build_model_designation
 from ..ModelNameParser import parse_model_name
 from ..TurbineCurveLoader import calculate_power_curve
+from ..utils import get_rated_power_kw
 
 
 def knmi_turbine_database_writer(
@@ -80,6 +81,7 @@ def knmi_turbine_database_writer(
 
                 height = dfHeader["z"][0]
                 diameter = 2.0 * dfHeader["r"][0]
+                rated_power = None
 
                 # Read cP and cT curves
                 dfData = pd.read_csv(
@@ -119,27 +121,34 @@ def knmi_turbine_database_writer(
 
                     logger.debug(f"modelname_data = {modelname_data}")
 
-                    if (
-                        "power" in modelname_data
-                        and not modelname_data["power"]
-                        and diameter > 0
-                        and len(wind_speeds) > 0
-                    ):
+                    rated_power = get_rated_power_kw(modelname_data)
+                    if rated_power > 0:
+                        logger.debug(
+                            f"Derived rated_power = {rated_power} kW "
+                            "from model name data."
+                        )
+
+                    if (rated_power or 0) == 0 and diameter > 0 and len(wind_speeds) > 0:
                         # Guess rated power by power curve
                         power_curve = calculate_power_curve(
                             wind_speeds, cp, diameter / 2, None
                         )
                         rated_power = round(max(power_curve) / 1000, 1) * 1000
 
-                        logger.debug(f"Derived rated_power = {rated_power} kW")
+                        logger.debug(
+                            f"Derived rated_power = {rated_power} kW " "from power curve."
+                        )
 
-                        turbine_model = build_model_designation(
+                    if rated_power > 0:
+                        new_turbine_model = build_model_designation(
                             modelname_data["manufacturer"], diameter, rated_power
                         )
-                        logger.info(
-                            f"Turbine_model reset to turbine_model = {turbine_model} "
-                            "to include estimated power data"
-                        )
+                        if new_turbine_model is not None:
+                            turbine_model = new_turbine_model
+                            logger.info(
+                                f"Turbine_model reset to turbine_model = {turbine_model} "
+                                "to include estimated power data"
+                            )
 
                     type_code = f"{prefix}_{type_id:03n}"
 
@@ -153,6 +162,7 @@ def knmi_turbine_database_writer(
                     type_id=type_id,
                     height=height,
                     diameter=diameter,
+                    power=rated_power,
                     ct_low=dfHeader["cT_low"][0],
                     ct_high=dfHeader["cT_high"][0],
                     wind_speeds=wind_speeds,
@@ -184,6 +194,7 @@ def generate_database_entry(
     type_id: int = 0,
     height: float = 0.0,
     diameter: float = 0.0,
+    power: float = 0.0,
     ct_low: float = 0.0,
     ct_high: float = 0.0,
     wind_speeds: Optional[List[float]] = None,
@@ -204,6 +215,7 @@ def generate_database_entry(
         "type_id": type_id or 0,
         "height": height or 0.0,
         "diameter": diameter or 0.0,
+        "rated_power": power or 0.0,
         "additional_params": {
             "radius (m)": diameter / 2 or 0.0,
             "z_height (m)": height or 0,

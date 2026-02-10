@@ -45,7 +45,7 @@ def read_locationdata_as_dataframe(
 
     # Apply rename rules (if applicable)
     if data is not None:
-        data = data.rename(columns=parse_rename_rules(rename_rules))
+        data = data.rename(columns=parse_rules(rename_rules))
 
     return data
 
@@ -191,8 +191,8 @@ def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataF
         logger.exception("Detailed error information:")
 
 
-def parse_rename_rules(rules: str | dict) -> dict:
-    """Parses a rename rules string to a dicationay."""
+def parse_rules(rules: str | dict) -> dict:
+    """Parses a rules string to a dicationay."""
     if rules is None:
         return {}
 
@@ -208,6 +208,6 @@ def parse_rename_rules(rules: str | dict) -> dict:
         rule_dict[key.strip(syms)] = value.strip(syms)
 
     if len(rule_dict) > 0:
-        logger.info(f"Parsed column rename rules: {rule_dict}")
+        logger.info(f"Parsed rules: {rule_dict}")
 
     return rule_dict

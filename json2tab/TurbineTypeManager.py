@@ -79,12 +79,12 @@ class TurbineTypeManager:
         """
         logger.debug(
             f"Get model_designation by tower properties: "
-            f"diameter={diameter} (type={type(diameter)}), "
-            f"height={height} (type={type(height)}), "
-            f"power={power} (type={type(power)}), "
-            f"year={year} (type={type(year)}), "
-            f"is_offshore={is_offshore} (type={type(is_offshore)}), "
-            f"country={country} (type={type(country)})"
+            f"diameter={diameter} (type={type(diameter).__name__}), "
+            f"height={height} (type={type(height).__name__}), "
+            f"power={power} (type={type(power).__name__}), "
+            f"year={year} (type={type(year).__name__}), "
+            f"is_offshore={is_offshore} (type={type(is_offshore).__name__}), "
+            f"country={country} (type={type(country).__name__})"
         )
 
         filtered_df = self.get_specs_dataframe(filtered=True)
@@ -110,22 +110,43 @@ class TurbineTypeManager:
                 )
                 filtered_df = self.specs_df_filtered
 
-        # Calculate similarity scores
+        if diameter is not None and not (
+            np.min(filtered_df["diameter"]) <= diameter <= np.max(filtered_df["diameter"])
+        ):
+            logger.info("Don't allow extrapolation in diameter range, so it is not used.")
+            diameter = None
+
+        if height is not None and not (
+            np.min(filtered_df["height"]) <= height <= np.max(filtered_df["height"])
+        ):
+            logger.info("Don't allow extrapolation in height range, so it is not used.")
+            height = None
+
+        if power is not None and not (
+            np.min(filtered_df["rated_power"])
+            <= power
+            <= np.max(filtered_df["rated_power"])
+        ):
+            logger.info("Don't allow extrapolation in power range, so it is not used.")
+            power = None
+
         scores = pd.DataFrame()
-        if diameter:
-            scores["diameter_score"] = np.abs(filtered_df["diameter"] - diameter)
-        else:
-            # Slightly prefer smaller turbines over larger ones
-            scores["diameter_score"] = np.abs(filtered_df["diameter"])
+        if not (diameter is None and height is None and power is None):
+            # Calculate similarity scores
+            if diameter:
+                scores["diameter_score"] = np.abs(filtered_df["diameter"] - diameter)
+            else:
+                # Slightly prefer smaller turbines over larger ones
+                scores["diameter_score"] = np.abs(filtered_df["diameter"])
 
-        if height:
-            scores["height_score"] = np.abs(filtered_df["height"] - height)
+            if height:
+                scores["height_score"] = np.abs(filtered_df["height"] - height)
 
-        if power:
-            scores["power_score"] = np.abs(filtered_df["rated_power"] - power)
-        else:
-            # Slightly prefer powerfull/powerless turbines in offshore/onshore region
-            scores["power_score"] = np.abs(filtered_df["rated_power"])
+            if power:
+                scores["power_score"] = np.abs(filtered_df["rated_power"] - power)
+            else:
+                # Slightly prefer powerfull/powerless turbines in offshore/onshore region
+                scores["power_score"] = np.abs(filtered_df["rated_power"])
 
         if not scores.empty:
             # Normalize and calculate total score with weighted factors
@@ -275,7 +296,9 @@ class TurbineTypeManager:
                     if power_col in specs.columns:
                         specs[power_col] = specs.apply(
                             lambda row, power_col=power_col: power_to_kw(
-                                row[power_col], diameter=row["diameter"]
+                                row[power_col],
+                                diameter=row["diameter"],
+                                hub_height=row["height"],
                             ),
                             axis=1,
                         )
@@ -421,18 +444,19 @@ def convert_json_to_specs_df(specs_data) -> pd.DataFrame:
         manufacturer = None
         diameter = get_diameter(data, 0)
         power = get_rated_power_kw(data)
+        height = get_height(data, 0)
 
         try:
             model_name_data = parse_model_name(model_name)
             manufacturer = model_name_data["manufacturer"]
-            if (
-                diameter == 0
-                and "diameter" in model_name_data
-                and model_name_data["diameter"]
-            ):
-                diameter = float(model_name_data["diameter"])
-            if power == 0 and "power" in model_name_data and model_name_data["power"]:
-                power = power_to_kw(float(model_name_data["power"]), diameter=diameter)
+            if diameter == 0:
+                diameter = get_diameter(model_name_data, default=0)
+            if power == 0:
+                power = power_to_kw(
+                    get_rated_power_kw(model_name_data, guess_unit=False),
+                    diameter=diameter,
+                    height=height,
+                )
         except (ValueError, IndexError, TypeError):
             pass
 
@@ -444,8 +468,6 @@ def convert_json_to_specs_df(specs_data) -> pd.DataFrame:
         if diameter < radius:
             diameter = 2 * radius
             logger.debug(f"Correced diamter for {type_code}, set diameter = 2*radius.")
-
-        height = get_height(data, 0)
 
         record = {
             "type_code": type_code,

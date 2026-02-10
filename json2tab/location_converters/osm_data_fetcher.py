@@ -18,8 +18,7 @@ from ..io.writers import save_dataframe
 from ..location_converters.overpass_query_builder import build_query
 from ..logs import logger
 from ..Turbine import Turbine
-from ..utils import power_to_kw
-from .cleanup_short_distance_turbines import cleanup_short_distance_turbines
+from ..utils import power_to_kw, print_processing_status
 
 
 def osm_data_fetcher(
@@ -129,7 +128,15 @@ def osm_data_fetcher(
             for osm_type in osm_types:
                 logger.info(f"Start processing osm type {osm_type}")
 
+                element_counter = 0
                 for element in elements[osm_type]:
+                    element_counter += 1
+                    print_processing_status(
+                        element_counter,
+                        len(elements[osm_type]),
+                        f"Processing OSM elements of type {osm_type}",
+                    )
+
                     if element.get("tags") is None:
                         if element.get("windturbine_via_wf"):
                             element["tags"] = {}
@@ -260,14 +267,6 @@ def osm_data_fetcher(
                 )
                 save_dataframe(df_windfarms, output_filename_windfarm)
 
-            # Cleanup short distance turbines
-            df_turbines, min_dist, _ = cleanup_short_distance_turbines(df_turbines)
-            logger.info(
-                f"Filtered dataframe to {len(df_turbines.index)} turbines with "
-                f"at least ~{int(111 * 1000 * min_dist)} meter "
-                f"(i.e. {min_dist} degree) distance."
-            )
-
             save_dataframe(df_turbines, output_filename)
             data = df_turbines
 
@@ -334,6 +333,17 @@ def process_wf_info(windfarm, element, elements):
 
         if n_turbines > 0 and installed_capacity is not None:
             power_rating = installed_capacity / n_turbines
+
+            if n_turbines > 7 and power_rating < 250 and installed_capacity < 7e3:
+                logger.info(
+                    f"Windfarm {get_osm_id(element)} with "
+                    f"{n_turbines} turbines has unlikely low installed capacity "
+                    f"(={installed_capacity} kW), "
+                    "lets assume it is rated power; "
+                    f"i.e. reset rated power to {installed_capacity} kW"
+                )
+                power_rating = installed_capacity
+
         else:
             power_rating = None
 
@@ -574,7 +584,10 @@ def parse_turbines_from_str(turbine_str: str):
 
 
 def parse_power_to_kw(
-    power_str: str, unit_fallback: Optional[str] = None, diameter: Optional[float] = None
+    power_str: str,
+    unit_fallback: Optional[str] = None,
+    diameter: Optional[float] = None,
+    hub_height: Optional[float] = None,
 ):
     """Try to convert power string to power in kW."""
     if power_str is None:
@@ -597,7 +610,7 @@ def parse_power_to_kw(
         except (ValueError, KeyError, TypeError):
             unit = unit_fallback
 
-        return power_to_kw(power, unit, diameter)
+        return power_to_kw(power, unit, diameter, hub_height)
 
     if power_str not in [
         "yes",

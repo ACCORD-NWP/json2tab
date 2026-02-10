@@ -11,6 +11,7 @@ from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
 from ..location_converters.get_lat_lon_matrix import get_lat_lon_matrix
 from ..location_converters.MergeStrategy import MergeStrategy
+from ..location_converters.MixStrategy import MixStrategy
 from ..logs import logger, logging
 from ..Turbine import Turbine
 from ..turbine_utils import datarow_to_turbine, merge_turbine_data
@@ -23,6 +24,7 @@ def location_merger(
     merge_mode: Optional[MergeStrategy | str] = MergeStrategy.Combine,
     label_source1: Optional[str] = None,
     label_source2: Optional[str] = None,
+    min_distance: Optional[float] = None,
     dump_temp_files: Optional[bool] = None,
     unique_file1=None,
     unique_file2=None,
@@ -59,7 +61,9 @@ def location_merger(
 
     print(
         f"Windturbine location merger; "
-        f"{file1} + {file2} -> {output_file} (merge_mode = {merge_mode})"
+        f"{file1} + {file2} -> {output_file} (merge_mode = {merge_mode}, "
+        f"min_distance = {min_distance} (~"
+        f"{int(111 * 1000 * min_distance) if min_distance is not None else None} meter)"
     )
     if unique_file1 is not None:
         print(f"Unique turbines in {file1} are written to {unique_file1}")
@@ -75,16 +79,14 @@ def location_merger(
     df_file1 = read_locationdata_as_dataframe(file1)
     df_file2 = read_locationdata_as_dataframe(file2)
 
-    if label_source1 is not None:
+    ignored_labels = [None, "", "NA", "N/A", "n/a", "-"]
+    if label_source1 not in ignored_labels:
         df_file1["source"] = label_source1
         logger.info(f"Set source-field for {file1} to '{label_source1}'")
 
-    if label_source2 is not None:
+    if label_source2 not in ignored_labels:
         df_file2["source"] = label_source2
         logger.info(f"Set source-field for {file2} to '{label_source2}'")
-
-    logger.info(f"Loaded {len(df_file1.index)} turbines from {file1}")
-    logger.info(f"Loaded {len(df_file2.index)} turbines from {file2}")
 
     (
         merged_turbines,
@@ -92,7 +94,12 @@ def location_merger(
         df_file2_unique,
         df_file1_duplicate,
         df_file2_duplicate,
-    ) = merge_dataframes(df_file1, df_file2)
+    ) = merge_dataframes(
+        df_file1,
+        df_file2,
+        tol=min_distance,
+        mix_strategy=MixStrategy.from_merge_strategy(merge_mode),
+    )
 
     if merged_file is not None:
         pd.DataFrame(merged_turbines).to_csv(merged_file, index=False)
@@ -164,6 +171,7 @@ def merge_dataframes(
     tol: Optional[float] = None,
     preferred_source_df: Optional[pd.DataFrame] = None,
     merged_source_name: Optional[str] = None,
+    mix_strategy: Optional[MixStrategy | str] = MixStrategy.MultiMerge,
 ) -> Tuple[List[Turbine], pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Merge wind turbine locations from different pandas.DataFrames."""
     start_time = time.time()
@@ -173,26 +181,17 @@ def merge_dataframes(
     if tol is None:
         tol = 1.5e-3  # ~150m threshold
 
-    done = False
-    while not done:
-        distances, idx = tree.query(
-            get_lat_lon_matrix(df_file2), k=1, distance_upper_bound=tol
-        )
+    if isinstance(mix_strategy, str):
+        mix_strategy = MixStrategy.from_string(mix_strategy)
 
-        overlapping = distances < tol
-        if overlapping.any():
-            if len(idx[overlapping]) != len(set(idx[overlapping])):
-                # tol /= 10
+    if mix_strategy is None:
+        mix_strategy = MixStrategy.MultiMerge
 
-                logger.warning(
-                    "One (or more) wind turbines from dataset2 are mapped to "
-                    "the multiple wind-turbines in dataset1, let's ignore it"
-                )
-                done = True
-            else:
-                done = True
-        else:
-            done = True
+    distances, idx = tree.query(
+        get_lat_lon_matrix(df_file2), k=1, distance_upper_bound=tol
+    )
+
+    overlapping = distances < tol
 
     logger.info(
         f"Compare wind turbine locations based on tol={tol} degree "
@@ -200,96 +199,101 @@ def merge_dataframes(
     )
 
     overlapping = distances < tol
+
     if overlapping.any():
-        df_file1_duplicate = df_file1.iloc[idx[overlapping]]
+        df_file1_duplicate = df_file1.iloc[list(set(idx[overlapping]))]
         df_file2_duplicate = df_file2[overlapping]
-
-        logger.info(f"Loaded {len(df_file1_duplicate)} duplicate turbines from dataset1")
-        logger.info(f"Loaded {len(df_file2_duplicate)} duplicate turbines from dataset2")
-
         df_file1_unique = df_file1.drop(df_file1_duplicate.index.array)
-        logger.info(f"Loaded {len(df_file1_unique)} unique turbines from dataset1")
+        df_file2_unique = df_file2.drop(df_file2_duplicate.index.array)
+        logger.info(
+            f"Loaded {len(df_file1_duplicate.index)} turbines from set1 with "
+            f"{len(df_file2_duplicate.index)} duplicate turbines in set2"
+        )
+
+        idx_file1 = idx[overlapping]
+        idx_file2 = df_file2_duplicate.index.to_list()
+        distances = distances[overlapping]
     else:
         df_file1_duplicate = None
         df_file2_duplicate = None
         df_file1_unique = df_file1
-
-    non_overlapping = distances >= tol
-    if non_overlapping.any():
-        df_file2_unique = df_file2[non_overlapping]
-        logger.info(f"Loaded {len(df_file2_unique)} unique turbines from dataset2")
-    else:
         df_file2_unique = df_file2
+
+    logger.info(f"Loaded {len(df_file1_unique.index)} unique turbines from set1")
+    logger.info(f"Loaded {len(df_file2_unique.index)} unique turbines from set2")
 
     merged_turbines = []
 
     if overlapping.any():
-        # Merge common files
-        merged_cols = [
-            "geometry",
-            "latitude",
-            "longitude",
-            "lat",
-            "lon",
-            "x",
-            "y",
-            "utm_x",
-            "utm_y",
-            "name",
-            "naam",
-            "turbine_nr",
-            "manufacturer",
-            "type",
-            "wt_type",
-            "wf101_type",
-            "hubheight",
-            "hub_height",
-            "height",
-            "ash",
-            "radius",
-            "radius (m)",
-            "diameter",
-            "diameter (m)",
-            "rotor_diameter",
-            "diam",
-            "rated_power",
-            "power",
-            "power_rating",
-            "kw",
-            "source",
-        ]
+        for idx1, row1 in df_file1_duplicate.iterrows():
+            idx2_dist = sorted(
+                [
+                    (idx_file2[i], distances[i])
+                    for i, x in enumerate(idx_file1)
+                    if x == idx1
+                ],
+                key=lambda x: x[1],
+            )
 
-        for idx in range(len(df_file1_duplicate)):
-            row1 = df_file1_duplicate.iloc[idx]
-            row2 = df_file2_duplicate.iloc[idx]
+            if len(idx2_dist) > 1 and mix_strategy == MixStrategy.MultiMerge:
+                merged_alternative = None
+                for idx2, _ in idx2_dist:
+                    row2 = df_file2_duplicate.loc[idx2]
+                    if merged_alternative is not None:
+                        merged_alternative = merge_turbine_data(
+                            merged_alternative, row2
+                        ).to_dict()
+                    else:
+                        merged_alternative = row2
 
-            if preferred_source_df is None:
-                if count_none_fields(row1, merged_cols) > count_none_fields(
-                    row2, merged_cols
-                ):
-                    preferred_source, alternative_source = row2, row1
-                else:
-                    preferred_source, alternative_source = row1, row2
-            elif preferred_source_df is df_file1:
-                preferred_source, alternative_source = row1, row2
-            elif preferred_source_df is df_file2:
-                preferred_source, alternative_source = row2, row1
-
-            if (
-                alternative_source.get("manufacturer") is not None
-                and alternative_source.get("type") is not None
-                and preferred_source.get("manufacturer") is None
-            ):
-                # Swap perferred/alternative source if manufacturer+type seems richer
-                preferred_source, alternative_source = (
-                    alternative_source,
-                    preferred_source,
+                merged_turbine = merge_turbine_data(
+                    row1, merged_alternative, merged_source_name
                 )
 
-            merged_turbine = merge_turbine_data(
-                preferred_source, alternative_source, merged_source_name
-            )
-            merged_turbines.append(merged_turbine)
+                merged_turbines.append(merged_turbine)
+            elif len(idx2_dist) > 1 and mix_strategy == MixStrategy.Crash:
+                msg = "Found not a 1:1 relation between turbines from different sources."
+                logger.error(msg)
+                logger.error(
+                    f"Turbine {row1.to_dict()} is mapped to the following turbines:"
+                )
+                for idx2, dist in idx2_dist:
+                    row2 = df_file2_duplicate.loc[idx2]
+                    logger.error(f"- {row2.to_dict()} (distance: {dist})")
+
+                raise Exception(msg)
+            else:
+                for idx2, _ in idx2_dist:
+                    row2 = df_file2_duplicate.loc[idx2]
+
+                    if preferred_source_df is df_file1 or len(idx2_dist) > 1:
+                        preferred_source, alternative_source = row1, row2
+                    elif preferred_source_df is df_file2:
+                        preferred_source, alternative_source = row2, row1
+                    else:
+                        preferred_source, alternative_source = select_richest_source(
+                            row1, row2
+                        )
+
+                        if (
+                            alternative_source.get("manufacturer") is not None
+                            and alternative_source.get("type") is not None
+                            and preferred_source.get("manufacturer") is None
+                        ):
+                            # Swap perf./alt. source if manufacturer+type seems richer
+                            preferred_source, alternative_source = (
+                                alternative_source,
+                                preferred_source,
+                            )
+
+                    merged_turbine = merge_turbine_data(
+                        preferred_source, alternative_source, merged_source_name
+                    )
+
+                    merged_turbines.append(merged_turbine)
+
+                    if mix_strategy == MixStrategy.SkipRemainder:
+                        break
     else:
         logger.info("No duplicates found")
 
@@ -302,6 +306,50 @@ def merge_dataframes(
         df_file1_duplicate,
         df_file2_duplicate,
     )
+
+
+def select_richest_source(row1, row2):
+    """Select richest source for as preffered source for merging."""
+    merged_cols = [
+        "geometry",
+        "latitude",
+        "longitude",
+        "lat",
+        "lon",
+        "x",
+        "y",
+        "utm_x",
+        "utm_y",
+        "name",
+        "naam",
+        "turbine_nr",
+        "manufacturer",
+        "type",
+        "wt_type",
+        "wf101_type",
+        "hubheight",
+        "hub_height",
+        "height",
+        "ash",
+        "radius",
+        "radius (m)",
+        "diameter",
+        "diameter (m)",
+        "rotor_diameter",
+        "diam",
+        "rated_power",
+        "power",
+        "power_rating",
+        "kw",
+        "source",
+    ]
+
+    if count_none_fields(row1, merged_cols) > count_none_fields(row2, merged_cols):
+        preferred_source, alternative_source = row2, row1
+    else:
+        preferred_source, alternative_source = row1, row2
+
+    return preferred_source, alternative_source
 
 
 def get_nearest_turbine(

@@ -65,6 +65,10 @@ def parse_model_name(model_name: str) -> dict:
         # Mitsubishi turbines; eg Mitsubishi  MWT-250
         r"(?P<manufacturer>Mitsubishi) MWT-(?P<diameter>\d+)/(?P<power>\d+(\.\d)?)",
         r"(?P<manufacturer>Mitsubishi) MWT-S?(?P<powerkW>\d+(\.\d)?)(-(?P<diameter>\d+))?",
+        # M.Torres  TWT 1.5-70
+        r"(?P<manufacturer>M\.?Torres) TWT (?P<powerMW>\d+(\.\d)?)(-(?P<diameter>\d+))?",
+        # Sinovel: Sinovel  SL1500/82
+        r"(?P<manufacturer>Sinovel) SL(?P<powerkW>\d+(\.\d)?)((/|\s|-)(?P<diameter>\d+))?",
         # Adwen turbines; eg Adwen AD 5-135
         r"(?P<manufacturer>Adwen) AD (?P<powerMW>\d+(\.\d)?)-(?P<diameter>\d+)",
         # IZAR TURBINAS turbines; eg IZAR TURBINAS  Bonus 44/600
@@ -119,6 +123,8 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>DeWind)\s+D(?P<diameterDm>\d+(\.\d+)?)(\s(?P<diameter>\d+)/(?P<powerKW>\d+))?",
         # DDIS  DDIS60  )
         r"(?P<manufacturer>DDIS)\s+DDIS(?P<diameter>\d+)",
+        # KONCAR Croatian manufacturer pattern KONČAR  K104
+        r"(?P<manufacturer>KONČAR( Croatian manufacturer)?|KONCAR( Croatian manufacturer)?) K(O - VA)?\s?(?P<diameter>\d+)",
         # Aircon models, eg AIRCON  30 or AIRCON  10 S
         r"(?P<manufacturer>Aircon) (?P<powerDW>\d+)( S)?",
         # BestWatt eg BestWatt BW10
@@ -351,6 +357,8 @@ def parse_model_name(model_name: str) -> dict:
                 and manufacturer.upper()
                 in [x.upper() for x in ["Micon", "NEG", "NEG-Micon", "NEG Micon"]]
                 and diameter > power
+                and (power / 2) ** 2 / diameter
+                > 5  # turbines scale roughly radius^2 ~ power
             ):
                 # Micon states sweep area in stead of diameter, correct for this
                 area = diameter
@@ -358,10 +366,10 @@ def parse_model_name(model_name: str) -> dict:
                 diameter = 2 * radius
 
             if manufacturer is not None and manufacturer.upper() in [
-                x.upper() for x in ["NEG", "NEG-Micon", "NEG Micon"]
+                x.upper() for x in ["NEG", "NEG-Micon", "NEG Micon", "Acciona"]
             ]:
-                # Check if we need to swap power and diameter for some NEG MICON
-                # turbine types as they seem to be less consistent
+                # Check if we need to swap power and diameter for some manufacturers
+                # as they seem to be less consistent with diameter/power
                 if (diameter is not None and power is not None and diameter > power) or (
                     diameter is not None and power is None and diameter > 150
                 ):
@@ -439,6 +447,7 @@ def parse_model_name(model_name: str) -> dict:
         "manufacturer_pattern": manufacturer_match_pattern,
         "diameter": diameter,
         "power": power,
+        "power_kw": power,
         "is_known_manufacturer": is_known_manufacturer,
     }
 

@@ -6,7 +6,7 @@
   name = "json2tab"
   readme = "README.md"
   repository = "https://github.com/destination-earth-digital-twins/json2tab"
-  version = "0.1.2"
+  version = "0.2.0"
 
 [tool.poetry.scripts]
   json2tab = "json2tab.__main__:main"

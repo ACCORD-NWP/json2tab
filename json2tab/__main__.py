@@ -217,6 +217,23 @@ def main(argv=None):
             help="Country or list of countries to select/remove from map",
         )
 
+        parser.add_argument(
+            "--write-columns",
+            metavar="write rule",
+            type=str,
+            help="Rules to write columns from input data before processing",
+            default=None,
+        )
+
+    if converter is not None or location_merger is not None:
+        parser.add_argument(
+            "--min-distance",
+            metavar="distance",
+            type=float,
+            help="Minimum distance (eg for removing duplicate turbines)",
+            default=None,
+        )
+
     if converter is not None or turbine_windfarm_mapper is not None:
         parser.add_argument(
             "--rename-columns",
@@ -296,10 +313,15 @@ def main(argv=None):
                     merge_mode=args.merge_mode,
                     label_source1=args.labels[0],
                     label_source2=args.labels[1],
+                    min_distance=args.min_distance,
                 )
             else:
                 location_merger(
-                    args.merge[0], args.merge[1], args.output, merge_mode=args.merge_mode
+                    args.merge[0],
+                    args.merge[1],
+                    args.output,
+                    merge_mode=args.merge_mode,
+                    min_distance=args.min_distance,
                 )
         else:
             logger.warning(
@@ -356,6 +378,8 @@ def main(argv=None):
                 output_filename=args.output,
                 country=args.country,
                 rename_rules=args.rename_columns,
+                write_columns=args.write_columns,
+                min_distance=args.min_distance,
             )
         else:
             logger.warning("Loading converter failed; please install optional packages.")

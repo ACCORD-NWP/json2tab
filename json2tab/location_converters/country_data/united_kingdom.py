@@ -48,6 +48,9 @@ def united_kingdom(
     x = data["X-coordinate"].to_numpy().tolist()
     y = data["Y-coordinate"].to_numpy().tolist()
 
+    # Derive is_offshore field from Technology Type
+    data["is_offshore"] = data["Technology Type"] == "Wind Offshore"
+
     geometry = gpd.points_from_xy(x, y, crs="EPSG:27700")
     geo_data = gpd.GeoDataFrame(data, geometry=geometry)
 

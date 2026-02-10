@@ -54,7 +54,7 @@ def unify_file_list(file_or_files: Path | List[Path] | str | List[str]) -> List[
     else:
         logger.warning(
             f"Unexpected file_or_files provided; "
-            f"type(file_or_files) = {type(file_or_files)}, "
+            f"type(file_or_files) = {type(file_or_files).__name__}, "
             f"file_or_files = {file_or_files}."
         )
         specs_file_list = file_or_files
@@ -316,37 +316,48 @@ def get_height(specs: Dict | List[Dict], default: float = 0.0) -> float:
     return height
 
 
-def get_rated_power_kw(specs: Dict[str, Any] | List[Dict], default: float = 0) -> float:
+def get_rated_power_kw(
+    specs: Dict[str, Any] | List[Dict], default: float = 0, guess_unit: bool = True
+) -> float:
     """Get rated power of wind turbine, given in kW.
 
     Args:
-        specs (dict):    Dictionary with turbine specifications
-        default (float): Default value to return, default 0.0
+        specs (dict):      Dictionary with turbine specifications
+        default (float):   Default value to return, default 0.0
+        guess_unit (bool): Guess missed unit of power based on diameter
 
     Returns:
         Rated power (in kW)
     """
     power_fields = [
-        "rated_power",
         "rated_power_kw",
         "rated_power_mw",
+        "rated_power",
         "rated power",
+        "Rated power (kW)",
+        "Rated power (MW)",
         "Rated power",
-        "power_rating",
         "power_rating_kw",
         "power_rating_mw",
-        "power",
+        "power_rating",
+        "power rating",
         "kw",
         "power_kw",
         "power_mw",
+        "power",
         "vermogen_m",
         "P_rated",
-        "nominal_power",
-        "nominal power",
         "nominal power (kW)",
+        "nominal power (MW)",
+        "nominal power",
+        "nominal_power_kw",
+        "nominal_power_mw",
+        "nominal_power",
         "capacity",
         "Capacity (kW)",
+        "Capacity (MW)",
         "Capacity",
+        "Maxeffekt (kW)",
         "Maxeffekt (MW)",
     ]
 
@@ -374,7 +385,10 @@ def get_rated_power_kw(specs: Dict[str, Any] | List[Dict], default: float = 0) -
         elif "KW" in key:
             unit = "KW"
 
-    return power_to_kw(rated_power, known_unit=unit, diameter=diameter) or default
+    if unit is not None or guess_unit:
+        return power_to_kw(rated_power, known_unit=unit, diameter=diameter) or default
+
+    return rated_power
 
 
 def get_installed_power(specs: Dict[str, Any] | List[Dict], default: float = 0) -> float:
@@ -396,6 +410,8 @@ def get_installed_power(specs: Dict[str, Any] | List[Dict], default: float = 0) 
         "Installed power [MW]",
         "Installed power [KW]",
         "installed_capacity",
+        "installed_capacity_kW",
+        "installed_capacity_MW",
         "installed capacity",
         "Installed capacity [MW]",
         "Installed capacity [KW]",
@@ -417,7 +433,10 @@ def get_installed_power(specs: Dict[str, Any] | List[Dict], default: float = 0) 
 
 
 def power_to_kw(
-    power: float, known_unit: Optional[str] = None, diameter: Optional[float] = None
+    power: float,
+    known_unit: Optional[str] = None,
+    diameter: Optional[float] = None,
+    hub_height: Optional[float] = None,
 ) -> float:
     """Guess if a given power is given in kW or MW and convert it to kW.
 
@@ -426,6 +445,7 @@ def power_to_kw(
         known_unit: Optional, the unit (kW or MW) of the power
             (otherwise it will be guessed by power-value)
         diameter: Optional, the diameter of the wind turbine
+        hub_height: Optional, the hub_height of the wind turbine
 
     Returns:
         Power in kW
@@ -437,18 +457,20 @@ def power_to_kw(
         except TypeError:
             return power
 
-    # Try to convert possible non-float typed diameter to float
-    if diameter is not None and not isinstance(diameter, float):
-        with contextlib.suppress(TypeError):
-            diameter = float(diameter)
+    for var in [diameter, hub_height]:
+        scale = var
+        # Try to convert possible non-float typed diameter/height to float
+        if scale is not None and not isinstance(scale, float):
+            with contextlib.suppress(TypeError):
+                scale = float(scale)
 
-    # Guess based on large_turbine flag,
-    # i.e. power of large turbines assumed to be in MW scale
-    if known_unit is None and diameter is not None:
-        if diameter >= 35 and power < 1:
-            known_unit = "MW"
-        elif power < 450:
-            known_unit = "MW" if diameter >= 60 else "kW"
+        # Guess based on large_turbine flag,
+        # i.e. power of large turbines assumed to be in MW scale
+        if known_unit is None and scale is not None:
+            if scale >= 35 and power < 1:
+                known_unit = "MW"
+            elif power < 450:
+                known_unit = "MW" if scale >= 60 else "kW"
 
     if known_unit is None:
         if power > 1e6:
@@ -470,3 +492,55 @@ def power_to_kw(
         return power * 1000  # Convert MW to kW
 
     return power  # Assume already in kW
+
+
+def do_nwp_check(radius: float, height: float) -> Tuple[bool, str]:
+    """Perform some final checks to see if hub height and radius are reasonable.
+
+    Checks are also perfomed while reading location data in NWP code.
+    """
+    passed_nwp_checks = True
+    if radius < 1 or radius > 500:
+        return False, "out of range radius"
+
+    if height < 10 or height > 500:
+        return False, "out of range hubheight"
+
+    if radius >= height:
+        return False, "wrong radius/height"
+
+    return passed_nwp_checks, ""
+
+
+def do_power_check(tower_power: float, type_power: float) -> Tuple[bool, str]:
+    """Check if rated power of turbine and turbine type are reasonable."""
+    deltaR = abs(tower_power / type_power) - 1 if type_power > 0 else 0
+
+    if type_power < 0:
+        return False, f"rated power of {type_power} kW"
+
+    deltaA = abs(tower_power - type_power)
+    if type_power > 0 and ((deltaR > 0.075 and deltaA > 100) or deltaA > 250):
+        return False, (
+            f"substantial difference of {int(100*deltaR)}% "
+            f"or {int(deltaA)}kW between "
+            f"tower rated_power (={tower_power} kW) and "
+            f"type rated_power (={type_power} kW)"
+        )
+
+    return True, ""
+
+
+def get_radius_diameter_height(turbine_specs, type_specs) -> Tuple[float, float, float]:
+    """Mix radius, diameter and height from turbine type and tower specs."""
+    # Prefer radius/diameter specs from type in stead of turbine
+    radius = get_radius([type_specs, turbine_specs])
+    diameter = 2 * radius if radius is not None else 0
+
+    # Prefer height of tower, but otherwise use height of turbine type
+    height = get_height([turbine_specs, type_specs])
+    nwp_passed, _ = do_nwp_check(radius, height)
+    if not nwp_passed:
+        height = get_height(type_specs)
+
+    return radius, diameter, height

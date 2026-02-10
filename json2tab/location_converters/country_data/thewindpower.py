@@ -5,7 +5,7 @@ from typing import Optional
 
 import pandas as pd
 
-from ...io.readers import parse_rename_rules
+from ...io.readers import parse_rules
 from ...io.writers import save_dataframe
 from ...logs import logger
 from ...turbine_utils import datarow_to_turbine
@@ -36,7 +36,7 @@ def thewindpower(
     data.columns = data.columns.str.strip()
 
     # Apply rename rules
-    data = data.rename(columns=parse_rename_rules(rename_rules))
+    data = data.rename(columns=parse_rules(rename_rules))
 
     data = data[
         (data["Status"] == "Production")

@@ -302,12 +302,12 @@ class ModelDesignationDeriver:
         data = parse_model_name(model_designation)
 
         manufacturer = data["manufacturer"]
-        diameter = get_diameter(data, None)
-        power = get_rated_power_kw(data, None)
+        diameter = get_diameter(data)
+        power = get_rated_power_kw(data, guess_unit=False)
         row_data_used = False
 
         if not power:
-            power = get_rated_power_kw(additional_data, None)
+            power = get_rated_power_kw(additional_data, None, guess_unit=False)
             row_data_used |= power is not None
 
         if not diameter:

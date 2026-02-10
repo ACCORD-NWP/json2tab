@@ -189,7 +189,7 @@ def get_cp_ct_power_curves(
     radius = get_radius(specs)
     rated_power_kw = None
     if not power_values:
-        rated_power_kw = get_rated_power_kw(specs)
+        rated_power_kw = get_rated_power_kw(specs, guess_unit=False)
 
     if not (ws_values and cp_values and ct_values):
         # Didn't manage to collect all necessary data
@@ -251,14 +251,18 @@ def get_cp_ct_power_curves(
     cut_in = ws_values[cut_in - 1 if cut_in > 0 else 0]
 
     max_ct = max(ct_values)
+    max_power = max(power_values)
     ws_max_ct = next((ws for ws, ct in zip(ws_values, ct_values) if ct == max_ct), None)
+    ws_max_pwr = next(
+        (ws for ws, pwr in zip(ws_values, power_values) if pwr == max_power), None
+    )
 
-    # Derive cut out based on zero ct for high wind_speeds
+    # Derive cut out based on zero ct or power for high wind_speeds
     cut_out = next(
         (
             idx
-            for idx, (ws, ct) in enumerate(zip(ws_values, ct_values))
-            if ct == 0 and ws > ws_max_ct
+            for idx, (ws, ct, pwr) in enumerate(zip(ws_values, ct_values, power_values))
+            if (ct == 0 and ws > ws_max_ct) or (pwr == 0 and ws > ws_max_pwr)
         ),
         None,
     )

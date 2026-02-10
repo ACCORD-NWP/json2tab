@@ -50,6 +50,12 @@ def germany(
         if manufacturer == "Sonstige":
             manufacturer = None
 
+        if manufacturer is not None:
+            # Cleanup some manufacturer strange values
+            manufacturer = manufacturer.replace("Deutschland", "")
+            manufacturer = manufacturer.replace("GmbH", "")
+            manufacturer = manufacturer.strip()
+
         diameter = row.get("Rotordurchmesser")
 
         turbine = Turbine(

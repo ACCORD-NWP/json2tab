@@ -49,11 +49,22 @@ class TurbineTypeTabFileWriter:
         except (KeyError, ValueError, TypeError):
             type_spec = {}
 
+        self.precision = int_value_or_default(type_spec.get("precision"), default=4)
+
+        try:
+            config_output_files = config["output"]["files"]
+        except (KeyError, ValueError, TypeError):
+            config_output_files = {}
+
+        self.type_index_length = int_value_or_default(
+            config_output_files.get("type_index_length"), default=3
+        )
+
         self.data_range = type_spec.get("windspeed_range", "cut-in:0.5:cut-out")
         self.extend_to_35ms = type_spec.get("extend_to_35ms", False)
         self.bypass_cutout = type_spec.get("bypass_cutout", False)
 
-        self.model_designation_statistics_filename = config["output"]["files"].get(
+        self.model_designation_statistics_filename = config_output_files.get(
             "model_designation_statistics"
         )
 
@@ -94,7 +105,8 @@ class TurbineTypeTabFileWriter:
         for type_index in type_idx_list:
             try:
                 # Write tab file for this type/model combination
-                filename = output_dir / f"{type_tab_prefix}{type_index:03d}.tab"
+                tabname = f"{type_tab_prefix}{type_index:0{self.type_index_length}d}.tab"
+                filename = output_dir / tabname
 
                 matched_line_index = (
                     self.type_index_generator.type_idx_to_matched_line_index(type_index)
@@ -268,12 +280,12 @@ class TurbineTypeTabFileWriter:
             )
 
             file.write(
-                f"\t{radius:.4f}"
-                f"\t{height:.4f}"
-                f"\t{ct_low:.4f}"
-                f"\t{ct_high:.4f}"
-                f"\t{cut_in:.4f}"
-                f"\t{cut_out:.4f}\n"
+                f"\t{radius:.{self.precision}f}"
+                f"\t{height:.{self.precision}f}"
+                f"\t{ct_low:.{self.precision}f}"
+                f"\t{ct_high:.{self.precision}f}"
+                f"\t{cut_in:.{self.precision}f}"
+                f"\t{cut_out:.{self.precision}f}\n"
             )
 
             # Write power curve header
@@ -282,9 +294,9 @@ class TurbineTypeTabFileWriter:
             # Write power curve data
             for ws, cp, ct, power in zip(wind_speeds, cp_values, ct_values, power_values):
                 file.write(
-                    f"\t{float(ws):.4f}"
-                    f"\t{float(cp):.4f}"
-                    f"\t{float(ct):.4f}"
+                    f"\t{float(ws):.{self.precision}f}"
+                    f"\t{float(cp):.{self.precision}f}"
+                    f"\t{float(ct):.{self.precision}f}"
                     f"\t{float(power):.1f}\n"
                 )
 
@@ -294,3 +306,14 @@ class TurbineTypeTabFileWriter:
 
             # Return the model designation used for the filename
             return specs
+
+
+def int_value_or_default(data, default: int) -> int:
+    """Converts a data to an integer or default value."""
+    if not isinstance(data, int):
+        try:
+            return int(data)
+        except (ValueError, TypeError):
+            return default
+
+    return data or default

@@ -1,4 +1,4 @@
-"""Module with get_lat_lon_matrix for wind turbine location data convertion."""
+"""Module to get lat/lon coordinates for wind turbine location data convertion."""
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,21 @@ except ImportError:
     shapely = None
 
 from ..logs import logger
+
+
+def get_lat_lon(turbine: dict):
+    """Get lat/lon coordinates for a turbine.
+
+    Args:
+        turbine: dict containing wind turbine data
+
+    Returns:
+        lat/lon coordinates of turbine
+
+    """
+    lat_lon = get_lat_lon_matrix(turbine, return_in_lat_lon_order=True)
+    lat, lon = lat_lon[0, 0], lat_lon[0, 1]
+    return lat, lon
 
 
 def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool = True):

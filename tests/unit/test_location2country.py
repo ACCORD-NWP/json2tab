@@ -4,7 +4,7 @@ import pytest
 
 from json2tab.tools.Location2CountryConverter import Location2CountryConverter
 
-COUNTRY_BORDER_FILE = "static_data/worldmap/country_borders/countries.geojson"
+COUNTRY_BORDER_FILE = "static_data/worldmap/country_borders/World Bank Official Boundaries - Admin 0/WB_GAD_ADM0.shp"
 EEZ_BORDER_FILE = "static_data/worldmap/EEZ/EEZ_land_union_v4_202410.shp"
 GADM_NETHERLANDS_FILE = "static_data/worldmap/Netherlands/gadm41_NLD_fixZH.gpkg"
 

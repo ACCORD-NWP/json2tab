@@ -6,7 +6,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .location_converters.get_lat_lon_matrix import get_lat_lon_matrix
+from .location_converters.get_lat_lon_matrix import get_lat_lon
 from .logs import logger
 from .Turbine import Turbine
 from .utils import (
@@ -121,12 +121,11 @@ def merge_turbine_data(
         alternative_used,
     )
 
-    lat_lon = get_lat_lon_matrix(
+    lat, lon = get_lat_lon(
         preferred_source
         if isinstance(preferred_source, dict)
         else preferred_source.to_dict()
     )
-    lat, lon = lat_lon[0, 0], lat_lon[0, 1]
 
     manufacturer, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
@@ -371,10 +370,15 @@ def merge_turbine_data(
 
     # Determine source
     if alternative_used:
-        source = (
-            merged_source_name
-            or f"{preferred_source.get('source')}+{alternative_source.get('source')}"
-        )
+        source1 = preferred_source.get("source", "")
+        source2 = alternative_source.get("source", "")
+
+        if source1 and source2:
+            created_source_name = f"{source1}+{source2}"
+        else:
+            created_source_name = f"{source1}{source2}"
+
+        source = merged_source_name or created_source_name
     else:
         source = preferred_source.get("source")
 

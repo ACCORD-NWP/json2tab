@@ -18,9 +18,12 @@ from .ProbabilisticMapper import ProbabilisticMapper
 from .TurbineLocationManager import TurbineLocationManager
 from .TurbineTypeManager import TurbineTypeManager
 from .utils import (
+    do_nwp_check,
+    do_power_check,
     empty_to_none,
     get_height,
     get_radius,
+    get_radius_diameter_height,
     get_rated_power_kw,
     print_processing_status,
     zero_to_none,
@@ -76,6 +79,11 @@ class TurbineMatcher:
 
         if isinstance(self.forbidden_types, str):
             self.forbidden_types = self.forbidden_types.split(";")
+
+        try:
+            self.use_cache = config["matcher"]["use_cache"]
+        except (KeyError, ValueError, TypeError):
+            self.use_cache = True
 
         try:
             self.use_probabilistic_mapper = config["matcher"]["use_probabilistic_mapper"]
@@ -151,24 +159,34 @@ class TurbineMatcher:
             matched_line_index
         ).to_dict()
 
-        sources = [tower_properties, type_specs]
-        radius = get_radius(sources)
-        height = get_height(sources)
+        radius, _, height = get_radius_diameter_height(tower_properties, type_specs)
+        model_designation = type_specs["model_designation"]
 
-        if radius < height:
-            return True
+        check_passed, msg = do_nwp_check(radius, height)
+        if not check_passed:
+            logger.info(
+                f"Found {msg} for turbine "
+                f"(radius={get_radius(tower_properties)}, "
+                f"height={get_height(tower_properties)}) and "
+                f"turbine type (radius={get_radius(type_specs)}, "
+                f"height={get_height(type_specs)}). "
+                f"Mixing results in model_designation='{model_designation}'."
+            )
 
-        logger.info(
-            "Found wrong radius/height for turbine "
-            f"(radius={get_radius(tower_properties)}, "
-            f"height={get_height(tower_properties)}) and "
-            f"turbine type (radius={get_radius(type_specs)}, "
-            f"height={get_height(type_specs)}). "
-            f"Mixing results in model_designation='{type_specs['model_designation']}'; "
-            f"radius={radius} >= hubheight={height}."
-        )
+            return False
 
-        return False
+        type_rated_power = get_rated_power_kw(type_specs, guess_unit=False)
+        tower_rated_power = get_rated_power_kw(tower_properties, guess_unit=False)
+        check_passed, msg = do_power_check(tower_rated_power, type_rated_power)
+
+        if not check_passed:
+            logger.info(
+                f"Found {msg} for turbine with model_designation='{model_designation}'."
+            )
+
+            return False
+
+        return True
 
     def tower_implements_cached_type(
         self, tower_properties, cached_turbine_type: str
@@ -247,11 +265,20 @@ class TurbineMatcher:
                 type_props = self.turbine_type_manager.get_specs_by_line_index(
                     matched_line_index
                 )
-                sources = [turbine, type_props]
-                radius = get_radius(sources)
-                diameter = 2 * radius if radius is not None else 0
-                height = get_height(sources)
-                rated_power = get_rated_power_kw(sources)
+
+                radius, diameter, height = get_radius_diameter_height(turbine, type_props)
+
+                tower_rated_power = get_rated_power_kw([turbine, type_props])
+                rated_power = get_rated_power_kw(type_props)
+                check_passed, msg = do_power_check(tower_rated_power, rated_power)
+                if not check_passed:
+                    logger.warning(
+                        f"Found {msg} for tower at "
+                        f"N{turbines.loc[idx, 'latitude']}, "
+                        f"E{turbines.loc[idx, 'longitude']} "
+                        f"used_matcher = {used_matcher} "
+                        f"turbine={turbine}"
+                    )
 
                 turbines.loc[idx, "radius"] = radius
                 turbines.loc[idx, "diameter"] = diameter
@@ -290,14 +317,6 @@ class TurbineMatcher:
         """Write matching statistics reports."""
         known_matchers = [
             "Total",
-            "CacheHit(TurbineType)",
-            "CacheHit(Manufacturer+TurbineType)",
-            "DatabaseLookup(Manufacturer+TurbineType)",
-            "DatabaseLookup(TurbineType)",
-            "DimensionLocationMapper",
-            "DatabaseLookup(TowerProperties)",
-            "ProbabilisticMapper",
-            "DefaultTurbineSelector",
         ]
 
         # Add missed keys
@@ -361,7 +380,7 @@ class TurbineMatcher:
         print(header)
 
         for datasource, sort_key, suffix in [
-            (hits_per_country, "Total", "_hits"),
+            (hits_per_country, "Total", ""),
             (percent_per_country, "Total (%)", "_percent"),
         ]:
             stats = pd.DataFrame(data=datasource).sort_values(
@@ -411,7 +430,9 @@ class TurbineMatcher:
             turbine_type = None
 
         # [Option 1]: Check if this turbine can implement this turbine_type
-        if turbine_type is not None and turbine_type in self.match_cache:
+        if self.use_cache and (
+            turbine_type is not None and turbine_type in self.match_cache
+        ):
             if self.tower_implements_cached_type(turbine, turbine_type):
                 model_designation, matched_line_index = self.match_cache[turbine_type]
                 return model_designation, matched_line_index, "CacheHit(TurbineType)"
@@ -432,7 +453,9 @@ class TurbineMatcher:
                 extended_type = f"{man_code} {turbine_type}"
 
         # [Option 2]: Check if this turbine can implement the extended turbine_type
-        if extended_type is not None and extended_type in self.match_cache:
+        if self.use_cache and (
+            extended_type is not None and extended_type in self.match_cache
+        ):
             if self.tower_implements_cached_type(turbine, extended_type):
                 model_designation, matched_line_index = self.match_cache[extended_type]
                 return (
@@ -517,10 +540,11 @@ class TurbineMatcher:
             if extended_type is not None:
                 extended_type_parse_data = parse_model_name(extended_type)
                 if extended_type_parse_data["is_known_manufacturer"]:
-                    extended_type_enriched = (
-                        self.model_designation_deriver.enrich_model_designation(
-                            extended_type, additional_data=turbine
-                        )
+                    (
+                        extended_type_enriched,
+                        _,
+                    ) = self.model_designation_deriver.enrich_model_designation(
+                        extended_type, additional_data=turbine
                     )
                     if extended_type_enriched != extended_type:
                         (
@@ -555,15 +579,15 @@ class TurbineMatcher:
                                 matched_line_index,
                                 "DatabaseLookup(EnrichedTurbineType)",
                             )
-                ...
 
             # [Option 4b]: Pure turbine_type-based model_designation detection
             turbine_type_parse_data = parse_model_name(turbine_type)
             if turbine_type_parse_data["is_known_manufacturer"]:
-                turbine_type_enriched = (
-                    self.model_designation_deriver.enrich_model_designation(
-                        turbine_type, additional_data=turbine
-                    )
+                (
+                    turbine_type_enriched,
+                    _,
+                ) = self.model_designation_deriver.enrich_model_designation(
+                    turbine_type, additional_data=turbine
                 )
                 if turbine_type_enriched != turbine_type:
                     (
@@ -597,28 +621,33 @@ class TurbineMatcher:
                             "DatabaseLookup(EnrichedTurbineType)",
                         )
 
-        # [Option 5]: Use the dimension/location mapper to get a guess for turbine_type
-        turbine_type_guess = self.dimension_location_mapper.map(turbine)
-        if turbine_type_guess:
-            (
-                model_designation,
-                matched_line_index,
-            ) = self._turbine_type_to_model_designation(turbine_type_guess)
-
-            if model_designation:
-                logger.info(
-                    f"Model designation is set to '{model_designation}' "
-                    f"(via turbine_type='{turbine_type_guess}') "
-                    f"based on DimensionLocationMapper "
-                    f"(match found in dataframe on index={matched_line_index})."
-                )
-
-                self.add_to_cache(
-                    turbine_type_guess, model_designation, matched_line_index
-                )
-                return model_designation, matched_line_index, "DimensionLocationMapper"
-
         if not (diameter is None and height is None and power is None):
+            if power is not None or diameter is not None:
+                # [Option 6-pre]: Use tower properties to derive model_designation
+                (
+                    specs,
+                    matched_line_index,
+                ) = self.turbine_type_manager.get_specs_by_tower_properties(
+                    diameter=diameter, power=power
+                )
+
+                if specs is not None:
+                    model_designation = specs["model_designation"]
+
+                    if model_designation:
+                        logger.info(
+                            f"Model designation for tower with "
+                            f"diameter={diameter}, power={power} "
+                            f"is set to '{model_designation}' "
+                            "by TurbineTypeManager (by tower properties) "
+                            f"(match found in dataframe on index={matched_line_index})."
+                        )
+                        return (
+                            model_designation,
+                            matched_line_index,
+                            "DatabaseLookup(TowerProperties:power+diameter)",
+                        )
+
             # [Option 6]: Use tower properties to derive model_designation for this tower
             (
                 specs,
@@ -641,8 +670,29 @@ class TurbineMatcher:
                     return (
                         model_designation,
                         matched_line_index,
-                        "DatabaseLookup(TowerProperties)",
+                        "DatabaseLookup(TowerProperties:power+height+diameter)",
                     )
+
+        # [Option 5]: Use the dimension/location mapper to get a guess for turbine_type
+        turbine_type_guess = self.dimension_location_mapper.map(turbine)
+        if turbine_type_guess:
+            (
+                model_designation,
+                matched_line_index,
+            ) = self._turbine_type_to_model_designation(turbine_type_guess)
+
+            if model_designation:
+                logger.info(
+                    f"Model designation is set to '{model_designation}' "
+                    f"(via turbine_type='{turbine_type_guess}') "
+                    f"based on DimensionLocationMapper "
+                    f"(match found in dataframe on index={matched_line_index})."
+                )
+
+                self.add_to_cache(
+                    turbine_type_guess, model_designation, matched_line_index
+                )
+                return model_designation, matched_line_index, "DimensionLocationMapper"
 
         # [Option 7]: Use the probabilistic mapper as fallback
         if self.use_probabilistic_mapper:
@@ -697,7 +747,7 @@ class TurbineMatcher:
                     return model_designation, matched_line_index, "DefaultTurbineSelector"
 
         # Final option: discard this turbine
-        logger.error(f"Cannot find turbine type for turbine at {tag_str} with {props}.")
+        logger.warning(f"Cannot find turbine type for turbine at {tag_str} with {props}.")
 
         if turbine_type is not None:
             logger.warning(

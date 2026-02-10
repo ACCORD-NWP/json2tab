@@ -7,34 +7,7 @@ import pandas as pd
 
 from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
-from ..location_converters.country_offshore_flag_fixer import country_offshore_flag_fixer
 from ..logs import logger
-
-
-def fix_country_offshore(input_filenames: List[str], output_filename: str):
-    """Fixer for country and is_offshore flag.
-
-    Args:
-        input_filenames (list[str]): Input files used in country_offshore_flag_fixer
-        output_filename (str):       Output csv/geojson-file with fixed turbine data
-    """
-    eez_files = [filename for filename in input_filenames if "eez" in filename.lower()]
-
-    country_border_files = [
-        filename for filename in input_filenames if "country_border" in filename.lower()
-    ]
-
-    eez_file = eez_files[0] if len(eez_files) > 0 else None
-    land_file = country_border_files[0] if len(country_border_files) > 0 else None
-
-    input_files = list(set(input_filenames) - {eez_file, land_file})
-
-    country_offshore_flag_fixer(
-        input_files,
-        eez_file=eez_file,
-        land_file=land_file,
-        output_filename=output_filename,
-    )
 
 
 def select_from_countries(

@@ -30,8 +30,8 @@ class Location2CountryConverter:
             prefer_iso3:         (Optional) Indicate if ISO-3 country codes are prefered,
                                  default: False
         """
-        full_name = ["name", "UNION"]
-        iso3_name = ["ISO3166-1-Alpha-3", "ISO_TER1"]
+        full_name = ["name", "UNION", "NAM_0"]
+        iso3_name = ["ISO3166-1-Alpha-3", "ISO_TER1", "ISO_A3"]
         country_field = iso3_name + full_name if prefer_iso3 else full_name + iso3_name
 
         if Path(country_border_file).suffix.lower() in {".json", ".geojson"}:
@@ -160,7 +160,7 @@ class Location2CountryConverter:
         data = gpd.read_file(file_name, layer=layer)
 
         countries = {}
-        for _idx, row in data.iterrows():
+        for _, row in data.iterrows():
             country = None
             for field in country_field:
                 if field in row:

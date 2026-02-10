@@ -1,6 +1,6 @@
 """Converter to generate wind turbine location files for The Netherlands.
 
-Input data based on RIVM and RWS data.
+Input data based on RIVM (onshore) and RWS (offshore) data.
 """
 
 import os
@@ -15,6 +15,7 @@ from ...location_converters.LocationMerger import (
     merge_dataframes,
     merge_turbine_data,
 )
+from ...location_converters.MixStrategy import MixStrategy
 from ...logs import logger
 from ...turbine_utils import datarow_to_turbine
 
@@ -23,16 +24,22 @@ def netherlands(
     rivm_input_filename: str,
     rws_input_filename: str,
     output_filename: Optional[str] = None,
+    min_distance: Optional[float] = None,
 ):
     """Converter to generate wind turbine location files for The Netherlands."""
     if output_filename is None:
         input_filename_base = os.path.splitext(rivm_input_filename)[0]
         output_filename = f"{input_filename_base}.geojson"
 
+    if min_distance is None:
+        min_distance = 0.0015  # By default take min distance of ~150 meter for turbines
+
     print(
         f"Netherlands Windturbine location shape Converter and Merger "
-        f"(RIVM: {rivm_input_filename}, "
-        f"RWS: {rws_input_filename} -> {output_filename})"
+        f"RIVM= {rivm_input_filename}, "
+        f"RWS= {rws_input_filename} -> {output_filename} ("
+        f"min_distance = {min_distance} (~"
+        f"{int(111 * 1000 * min_distance) if min_distance is not None else None} meter)"
     )
     print(
         "  > RIVM Shape-file (for Windturbines - vermogen) can be downloaded from: "
@@ -67,7 +74,10 @@ def netherlands(
     logger.info(f"Filtered RWS data to {len(rws_data)} used wind turbines")
 
     rivm_data["source"] = "Netherlands (RIVM)"
+    rivm_data["is_offshore"] = False
+
     rws_data["source"] = "Netherlands (RWS)"
+    rws_data["is_offshore"] = True
 
     merged_source_name = "Netherlands (RWS+RIVM)"
     (
@@ -79,9 +89,10 @@ def netherlands(
     ) = merge_dataframes(
         rivm_data,
         rws_data,
-        tol=0.0015,
+        tol=min_distance,
         preferred_source_df=rws_data,
         merged_source_name=merged_source_name,
+        mix_strategy=MixStrategy.Crash,
     )
     logger.info(f"Found {len(rws_rivm_common)} common turbines in RIVM and RWS dataset")
 

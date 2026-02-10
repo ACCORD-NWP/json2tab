@@ -9,7 +9,13 @@ import pandas as pd
 from .io.write_statistics import write_statistics
 from .logs import logger
 from .TurbineMatcher import TurbineMatcher
-from .utils import get_height, get_radius, get_rated_power_kw, print_processing_status
+from .utils import (
+    do_nwp_check,
+    get_height,
+    get_radius,
+    get_rated_power_kw,
+    print_processing_status,
+)
 
 
 class TurbineLocationTabFileWriter:
@@ -22,6 +28,20 @@ class TurbineLocationTabFileWriter:
         self.matcher = matcher
         self.location_manager = matcher.turbine_location_manager
         self.type_manager = matcher.turbine_type_manager
+
+        format_config = {}
+        with contextlib.suppress(Exception):
+            format_config = self.config["output"]["tab_format"]["location"]
+
+        self.precision = format_config.get("precision")
+        self.print_line_comment = format_config.get("print_line_comment", False)
+
+        if not isinstance(self.precision, int):
+            try:
+                self.precision = int(self.precision)
+            except (ValueError, TypeError):
+                # By default print 4 digits
+                self.precision = 4
 
     def _write_header(self, file):
         # Collect selection info for header string in output file
@@ -72,10 +92,12 @@ class TurbineLocationTabFileWriter:
             "# This file includes references to an auto-increment type "
             "and the model designation\n"
         )
-        file.write(
-            "#     lon          lat          type        r         z     # "
-            "| country | is_offshore | rated_power | model_designation\n"
-        )
+
+        header_line = "#     lon          lat          type        r         z     "
+        if self.print_line_comment:
+            header_line += "# | country | is_offshore | rated_power | model_designation"
+
+        file.write(f"{header_line}\n")
 
     def write(
         self,
@@ -124,7 +146,7 @@ class TurbineLocationTabFileWriter:
 
                     # Fetch optional information
                     country = turbine.get("country")
-                    rated_power = get_rated_power_kw(turbine)
+                    rated_power = get_rated_power_kw(turbine, guess_unit=False)
                     is_offshore = turbine.get("is_offshore")
                     model_designation = turbine.get(self.matcher.model_designation_key)
 
@@ -134,25 +156,29 @@ class TurbineLocationTabFileWriter:
                     )
 
                     if model_designation is not None:
-                        # Format line with proper spacing and including model designation
+                        # Format line with proper spacing
                         line = (
-                            f"{float(lon):10.4f}   "
-                            f"{float(lat):10.4f}   "
+                            f"{float(lon):10.{self.precision}f}   "
+                            f"{float(lat):10.{self.precision}f}   "
                             f"{type_idx:>8}    "
                             f"{radius:>8.2f}   "
-                            f"{height:>8.2f}   "
-                            "#| "
-                            f"{country} | "
-                            f"{is_offshore} | "
-                            f"{rated_power} | "
-                            f"{model_designation}\n"
+                            f"{height:>8.2f}"
                         )
 
-                        if self._do_nwp_check(
-                            radius, height, model_designation, lon, lat
-                        ):
+                        if self.print_line_comment:
+                            # Format line with additional debug info
+                            line += (
+                                "   #| "
+                                f"{country} | "
+                                f"{is_offshore} | "
+                                f"{rated_power} | "
+                                f"{model_designation}"
+                            )
+
+                        nwp_passed, msg = do_nwp_check(radius, height)
+                        if nwp_passed:
                             for _ in range(multiplicity):
-                                file.write(line)
+                                file.write(f"{line}\n")
 
                             if multiplicity > 1:
                                 logger.warning(
@@ -161,6 +187,11 @@ class TurbineLocationTabFileWriter:
                                     f"wind farm at {tag_str}."
                                 )
                         else:
+                            logger.error(
+                                f"Found {msg} for {model_designation} at "
+                                f"(N{lat}, E{lon}), radius={radius}"
+                            )
+
                             # Note: at the moment the NWP cannot handle commented out
                             # turbines, so completly remove them from the tab-file.
                             logger.warning(
@@ -191,44 +222,6 @@ class TurbineLocationTabFileWriter:
                 logger.warning(msg)
 
             logger.info("Finished writing turbine location tab file.")
-
-    def _do_nwp_check(
-        self,
-        radius: float,
-        height: float,
-        model_designation: Optional[str] = None,
-        lon: Optional[float] = None,
-        lat: Optional[float] = None,
-    ):
-        """Perform some final checks to see if hub height and radius are reasonable.
-
-        Checks are also perfomed while reading location data in NWP code.
-        """
-        passed_nwp_checks = True
-        if radius < 1 or radius > 500:
-            logger.error(
-                f"Found wrong radius for {model_designation} at "
-                f"({float(lon):10.4f}; {float(lat):10.4f}), radius={radius}"
-            )
-            passed_nwp_checks = False
-
-        if height < 10 or height > 500:
-            logger.error(
-                f"Found wrong hubheight for {model_designation} at "
-                f"({float(lon):10.4f}; {float(lat):10.4f}), "
-                f"hubheight={height}"
-            )
-            passed_nwp_checks = False
-
-        if radius >= height:
-            logger.error(
-                f"Found wrong radius/height for {model_designation} at "
-                f"({float(lon):10.4f}; {float(lat):10.4f}), "
-                f"radius={radius} >= hubheight={height}"
-            )
-            passed_nwp_checks = False
-
-        return passed_nwp_checks
 
     def write_installed_capacity_table(self, matched_turbines: pd.DataFrame):
         """Write table with installed capacity for each country."""

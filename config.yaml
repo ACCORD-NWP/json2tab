@@ -88,6 +88,7 @@ output:
     # Tab file outputs
     location_tab: "turbine_locations.tab"
     type_tab_prefix: "wind_turbine_"  # Will be followed by type ID and .tab
+    type_index_length: 3 # Number of digets to use when writing typeID in tab-filename
     
   # Tab file formatting
   tab_format:
