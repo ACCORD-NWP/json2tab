@@ -53,10 +53,10 @@ class Location2CountryConverter:
                 # Process layer for GADM map files (https://gadm.org)
                 layer = f"ADM_ADM_{level}"
 
-                full_name = [f"NAME_{level}"]
+                full_name = [f"NAME_{level}", f"NAM_{level}"]
                 iso3_name = [f"ISO_{level}"]
-                backup_full = ["COUNTRY"]
-                backup_iso3 = ["GID_0"]
+                backup_full = ["COUNTRY", "NAME_0", "NAM_0"]
+                backup_iso3 = ["GID_0", "ISO_A3"]
 
                 if prefer_iso3:
                     country_field = iso3_name + full_name + backup_iso3 + backup_full
@@ -157,6 +157,12 @@ class Location2CountryConverter:
         logger.debug(f"country_field = '{country_field}' (len={len(country_field)})")
         logger.debug(f"geometry_field = '{geometry_field}'")
 
+        # Check for available layers; pick unique one if it exists
+        layers = gpd.list_layers(file_name)
+        if len(layers) == 1:
+            layer = layers["name"][0]
+
+        logger.debug(f"layer = {layer}")
         data = gpd.read_file(file_name, layer=layer)
 
         countries = {}

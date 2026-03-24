@@ -8,6 +8,7 @@ from ..location_converters.country_data.denmark import denmark
 from ..location_converters.country_data.finland import finland
 from ..location_converters.country_data.flanders import flanders
 from ..location_converters.country_data.germany import germany
+from ..location_converters.country_data.greece import greece
 from ..location_converters.country_data.italy import italy
 from ..location_converters.country_data.netherlands import netherlands
 from ..location_converters.country_data.sweden import sweden
@@ -59,6 +60,7 @@ supported_conversion_types: List[str] = sorted(
         "uk",
         "unitedkingdom",
         "united_kingdom",
+        "greece",
         "twp",
         "thewindpower",
         "thewindpower.net",
@@ -101,12 +103,26 @@ def converter(
     # Process first multi-input file converters
     if convert_type in ["fix_country_offshore", "fix_country_is_offshore"]:
         fix_country_offshore(
-            input_filenames, output_filename, update_country=True, update_is_offshore=True
+            input_filenames,
+            output_filename,
+            update_country=True,
+            update_is_offshore=True,
+            filter_countries=country,
         )
     elif convert_type == "fix_country":
-        fix_country_offshore(input_filenames, output_filename, update_country=True)
+        fix_country_offshore(
+            input_filenames,
+            output_filename,
+            update_country=True,
+            filter_countries=country,
+        )
     elif convert_type in ["fix_offshore", "fix_onshore", "fix_is_offshore"]:
-        fix_country_offshore(input_filenames, output_filename, update_is_offshore=True)
+        fix_country_offshore(
+            input_filenames,
+            output_filename,
+            update_is_offshore=True,
+            filter_countries=country,
+        )
     elif convert_type == "netherlands":
         rivm_file = input_filenames[0]
         rws_file = input_filenames[1]
@@ -114,6 +130,16 @@ def converter(
             # Swap arguments as the second argument seems to be the RIVM file
             rivm_file, rws_file = rws_file, rivm_file
         netherlands(rivm_file, rws_file, output_filename, min_distance=min_distance)
+    elif convert_type == "greece":
+        windfarm_file = input_filenames[0]
+        windturbine_file = input_filenames[1]
+        if (
+            "features.geojson" in windturbine_file
+            and "features.geojson" not in windfarm_file
+        ):
+            # Swap arguments as the second argument seems to be the windfarm_file
+            windfarm_file, windturbine_file = windturbine_file, windfarm_file
+        greece(windfarm_file, windturbine_file, output_filename)
     elif convert_type == "osm":
         osm_data_fetcher(output_filename, input_filenames[0])
     elif convert_type == "osm_windturbine":

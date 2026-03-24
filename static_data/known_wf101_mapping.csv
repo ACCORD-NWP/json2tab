@@ -1,6 +1,6 @@
 type_id,type_code,turbine_model
-8021,V90,Vestas V90-3.0MW
-9999,V90,Vestas V90-3.0MW
+8021,V90,Vestas V80-1.8
+9999,V90,Vestas V90-3.0
 407,FO_407,DeWind D4 48/600
 607,FO_607,DeWind D6 62/1250
 807,FO_807,DeWind D8

@@ -15,6 +15,9 @@ def save_dataframe_as_csv(
     Args:
         data (pandas.DataFrame): DataFrame containing wind turbine data
         output_file (str):       Path for the output CSV file
+
+    Raises:
+        Exception: when writing data is failed
     """
     try:
         logger.info("Writing data to CSV file...")
@@ -29,4 +32,4 @@ def save_dataframe_as_csv(
 
     except Exception as e:
         logger.error(f"Error saving CSV file: {e}")
-        logger.exception("Detailed error information:")
+        raise e

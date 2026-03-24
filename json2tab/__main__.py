@@ -2,8 +2,10 @@
 """JSON-2-TAB command line entry point."""
 
 import argparse
+import datetime
 import importlib.metadata
 import os
+import time
 
 from .json2tab import json2tab
 
@@ -24,9 +26,9 @@ except ImportError:
     osm_data_fetcher = None
 
 try:
-    from .location_converters.TurbineWindfarmMapper import turbine_windfarm_mapper
+    from .location_converters.TurbineWindfarmMapper import TurbineWindfarmMapper
 except ImportError:
-    turbine_windfarm_mapper = None
+    TurbineWindfarmMapper = None
 
 from .logs import logger
 from .tools.KnmiTurbineDatabaseWriter import knmi_turbine_database_writer
@@ -44,14 +46,18 @@ def main(argv=None):
     """Program's main routine."""
     prog = "json2tab"
 
-    parser = argparse.ArgumentParser(prog=prog)
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="Json-2-tab: wind turbine location data processor and converter.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
 
     parser.add_argument(
         "--config-file",
         "-c",
         metavar="filepath",
         type=str,
-        help="Path to the config file; Default: config.yaml",
+        help="Path to the config file",
         default="config.yaml",
     )
 
@@ -61,7 +67,7 @@ def main(argv=None):
         metavar="filepath",
         type=str,
         help="Database file with turbine specifications; "
-        "Default: None (i.e. as specified in config::input.turbine_database)",
+        "Default: as specified in config::input.turbine_database",
         default=None,
     )
 
@@ -71,7 +77,7 @@ def main(argv=None):
         metavar="filepath",
         type=str,
         help="Main GeoJSON file containing turbine locations; "
-        "Default: None (i.e. as specified in config::input.turbine_locations)",
+        "Default: as specified in config::input.turbine_locations",
         default=None,
     )
 
@@ -81,7 +87,7 @@ def main(argv=None):
         metavar="filepath",
         type=str,
         help="Domain configuration file; "
-        "Default: None (i.e. as specified in config::subsetting.domain.file)",
+        "Default: as specified in config::subsetting.domain.file",
         default=None,
     )
 
@@ -91,7 +97,7 @@ def main(argv=None):
         metavar="date",
         type=str,
         help="Date to filter turbines in temporal domain; "
-        "Default: None (i.e. as specified in config::subsetting.situation_date)",
+        "Default: as specified in config::subsetting.situation_date",
         default=None,
     )
 
@@ -101,7 +107,7 @@ def main(argv=None):
         metavar="dir",
         type=str,
         help="Directory for all output files; "
-        "Default: None (i.e. as specified in config::output.directory)",
+        "Default: as specified in config::output.directory",
         default=None,
     )
 
@@ -111,7 +117,7 @@ def main(argv=None):
         metavar="file",
         type=str,
         help="Filename of the turbine location output tab-file; "
-        "Default: None (i.e. as specified in config::output.files.location_tab)",
+        "Default: as specified in config::output.files.location_tab",
         default=None,
     )
 
@@ -121,7 +127,7 @@ def main(argv=None):
         metavar="prefix",
         type=str,
         help="Prefix of the turbine type files; "
-        "Default: None (i.e. as specified in config::output.files.type_tab_prefix)",
+        "Default: as specified in config::output.files.type_tab_prefix",
         default=None,
     )
 
@@ -137,7 +143,7 @@ def main(argv=None):
         "-dbg",
         metavar="level",
         type=int,
-        help="verbosity level (0...3); Default: 1",
+        help="verbosity level (0...3)",
         default=1,
     )
 
@@ -171,7 +177,7 @@ def main(argv=None):
             default=None,
         )
 
-    if turbine_windfarm_mapper is not None:
+    if TurbineWindfarmMapper is not None:
         parser.add_argument(
             "--map",
             metavar="windfarm location-file, turbine location-file",
@@ -234,7 +240,7 @@ def main(argv=None):
             default=None,
         )
 
-    if converter is not None or turbine_windfarm_mapper is not None:
+    if converter is not None or TurbineWindfarmMapper is not None:
         parser.add_argument(
             "--rename-columns",
             metavar="rename rule",
@@ -243,7 +249,7 @@ def main(argv=None):
             default=None,
         )
 
-    if location_merger is not None or turbine_windfarm_mapper is not None:
+    if location_merger is not None or TurbineWindfarmMapper is not None:
         parser.add_argument(
             "--labels",
             metavar="source labels",
@@ -262,7 +268,7 @@ def main(argv=None):
             default="combine",
         )
 
-    if turbine_windfarm_mapper is not None:
+    if TurbineWindfarmMapper is not None:
         parser.add_argument(
             "--max-distance",
             metavar="distance",
@@ -271,8 +277,23 @@ def main(argv=None):
             default=None,
         )
 
+        parser.add_argument(
+            "--map-mode",
+            metavar="type of mapping",
+            type=str,
+            choices=[
+                "by_distance",
+                "by_geometry",
+                "by_geometry+by_distance",
+                "by_distance+by_geometry",
+            ],
+            help="Specify map mode how to map turbines to windfarms",
+            default="by_distance",
+        )
+
     parser.add_argument("--output", metavar="output filename", type=str, default=None)
 
+    start_time = time.time()
     args = parser.parse_args(argv)
 
     if args.debug_level == 0:
@@ -287,15 +308,16 @@ def main(argv=None):
     logger.debug(f"This is logging from logger {logger.name}")
     logger.debug(f"Binary path: {basedir} ")
     logger.debug(f"Parsed arguments: {args}")
+    logger.debug(f"Application started at {datetime.datetime.now()}")
 
-    if args.inverse:
+    if hasattr(args, "inverse") and args.inverse:
         database_file = args.output or "turbine_database+knmi.json"
         print(
             "Convert turbine tab-file to json turbine-database entry, "
             "dump output database to {database_file}"
         )
         knmi_turbine_database_writer(args.inverse, database_file)
-    elif args.fetch_osm_data:
+    elif hasattr(args, "fetch_osm_data") and args.fetch_osm_data:
         if osm_data_fetcher is not None:
             output_filename = args.fetch_osm_data
             osm_data_fetcher(output_filename, query_windturbine=True, query_windfarm=True)
@@ -303,59 +325,47 @@ def main(argv=None):
             logger.warning(
                 "Loading osm data fetcher failed; please install optional packages."
             )
-    elif args.merge:
+    elif hasattr(args, "merge") and args.merge:
         if location_merger is not None:
-            if args.labels and len(args.labels) == len(args.merge):
-                location_merger(
-                    args.merge[0],
-                    args.merge[1],
-                    args.output,
-                    merge_mode=args.merge_mode,
-                    label_source1=args.labels[0],
-                    label_source2=args.labels[1],
-                    min_distance=args.min_distance,
-                )
-            else:
-                location_merger(
-                    args.merge[0],
-                    args.merge[1],
-                    args.output,
-                    merge_mode=args.merge_mode,
-                    min_distance=args.min_distance,
-                )
+            location_merger(
+                args.merge[0],
+                args.merge[1],
+                args.output,
+                merge_mode=args.merge_mode,
+                label_source1=args.labels[0]
+                if args.labels and len(args.labels) == len(args.merge)
+                else None,
+                label_source2=args.labels[1]
+                if args.labels and len(args.labels) == len(args.merge)
+                else None,
+                min_distance=args.min_distance,
+            )
         else:
             logger.warning(
                 "Loading location merger failed; please install optional packages."
             )
-    elif args.map:
-        if turbine_windfarm_mapper is not None:
-            max_distance = args.max_distance
-            if args.labels and len(args.labels) > 0:
-                turbine_windfarm_mapper(
-                    args.map[0],
-                    args.map[1],
-                    args.output,
-                    merge_mode=args.merge_mode,
-                    source_label=args.labels[0],
-                    max_distance=max_distance,
-                    rename_rules=args.rename_columns,
-                )
-            else:
-                turbine_windfarm_mapper(
-                    args.map[0],
-                    args.map[1],
-                    args.output,
-                    merge_mode=args.merge_mode,
-                    max_distance=max_distance,
-                    rename_rules=args.rename_columns,
-                )
+    elif hasattr(args, "map") and args.map:
+        if TurbineWindfarmMapper is not None:
+            mapper = TurbineWindfarmMapper()
+            mapper.map_files(
+                args.map_mode,
+                args.map[0],
+                args.map[1],
+                args.output,
+                merge_mode=args.merge_mode,
+                source_label=args.labels[0]
+                if args.labels and len(args.labels) > 0
+                else None,
+                rename_rules=args.rename_columns,
+                max_distance=args.max_distance,
+            )
         else:
             logger.warning(
                 "Loading turbine windfarm mapper failed; "
                 "please install optional packages."
             )
 
-    elif args.location2country:
+    elif hasattr(args, "location2country") and args.location2country:
         if Location2CountryConverter is not None:
             level = (
                 int(args.location2country[3]) if len(args.location2country) > 3 else None
@@ -370,7 +380,7 @@ def main(argv=None):
                 "Loading location2country converter failed; "
                 "please install optional packages."
             )
-    elif args.convert:
+    elif hasattr(args, "convert") and args.convert:
         if converter is not None:
             converter(
                 convert_type=args.type,
@@ -396,6 +406,10 @@ def main(argv=None):
             location_file=args.output_location_filename,
             type_file_prefix=args.output_type_file_prefix,
         )
+
+    duration = time.time() - start_time
+    logger.debug(f"Application finished at {datetime.datetime.now()}")
+    logger.debug(f"Application execution took {duration} seconds")
 
 
 if __name__ == "__main__":

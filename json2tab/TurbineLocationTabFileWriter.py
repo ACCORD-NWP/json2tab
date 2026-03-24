@@ -227,7 +227,11 @@ class TurbineLocationTabFileWriter:
         """Write table with installed capacity for each country."""
         output_dir = Path(self.config["output"]["directory"])
 
-        countries = matched_turbines["country"].unique().tolist()
+        if len(matched_turbines) > 0:
+            countries = matched_turbines["country"].unique().tolist()
+        else:
+            countries = []
+
         data = {
             "Country": countries,
             "Total installed capacity (MW)": len(countries) * [0],
@@ -238,34 +242,39 @@ class TurbineLocationTabFileWriter:
             "Offshore turbines": len(countries) * [0],
         }
 
-        for label, flag in [
-            ("Total installed", None),
-            ("Onshore", False),
-            ("Offshore", True),
-        ]:
-            filtered_table = matched_turbines
-            if flag is not None:
-                filtered_table = matched_turbines[matched_turbines["is_offshore"] == flag]
+        if len(matched_turbines) > 0:
+            for label, flag in [
+                ("Total installed", None),
+                ("Onshore", False),
+                ("Offshore", True),
+            ]:
+                filtered_table = matched_turbines
+                if flag is not None:
+                    filtered_table = matched_turbines[
+                        matched_turbines["is_offshore"] == flag
+                    ]
 
-            with pd.option_context("future.no_silent_downcasting", True):
-                filtered_table = filtered_table.fillna({"n_turbines": 1}).infer_objects(
-                    copy=False
+                with pd.option_context("future.no_silent_downcasting", True):
+                    filtered_table = filtered_table.fillna(
+                        {"n_turbines": 1}
+                    ).infer_objects(copy=False)
+                filtered_table = filtered_table.assign(
+                    weighted_power_rating=filtered_table["power_rating"]
+                    * filtered_table["n_turbines"]
                 )
-            filtered_table = filtered_table.assign(
-                weighted_power_rating=filtered_table["power_rating"]
-                * filtered_table["n_turbines"]
-            )
 
-            sub_table = (
-                filtered_table.groupby("country")
-                .agg({"weighted_power_rating": "sum", "n_turbines": "sum"})
-                .reset_index()
-            )
+                sub_table = (
+                    filtered_table.groupby("country")
+                    .agg({"weighted_power_rating": "sum", "n_turbines": "sum"})
+                    .reset_index()
+                )
 
-            for _, row in sub_table.iterrows():
-                idx = countries.index(row["country"])
-                data[f"{label} capacity (MW)"][idx] = row["weighted_power_rating"] / 1000
-                data[f"{label} turbines"][idx] = row["n_turbines"]
+                for _, row in sub_table.iterrows():
+                    idx = countries.index(row["country"])
+                    data[f"{label} capacity (MW)"][idx] = (
+                        row["weighted_power_rating"] / 1000
+                    )
+                    data[f"{label} turbines"][idx] = row["n_turbines"]
 
         # Add total line:
         data["Country"].append("Total")

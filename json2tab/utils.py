@@ -13,6 +13,7 @@ def print_processing_status(
     label: str = "Processing turbines",
     step: int = 10,
     thresshold: int = 1000,
+    log_always: bool = False,
 ):
     """Print status during processing of items (i.e. turbines).
 
@@ -22,14 +23,19 @@ def print_processing_status(
         label (str):      Label used to describe activity
         step (int):       Print output for each step-increment in percentage
         thresshold (int): Minimal number of items before printing status
+        log_always (bool):Print always status message
 
     """
     with contextlib.suppress(Exception):
-        if total > thresshold:
+        if total > thresshold or log_always:
             percent_prev = float(counter - 1) / total
             percent = float(counter) / total
 
-            if int(percent_prev * step) != int(percent * step):
+            if (
+                int(percent_prev * step) != int(percent * step)
+                or counter < 2
+                or log_always
+            ):
                 msg = f"{label}: {counter} out of {total} " f"({int(percent*100)}%)"
                 logger.log(logger.getEffectiveLevel(), f"[STATUS] {msg}")
 
@@ -93,6 +99,9 @@ def empty_to_none(data):
         The data (or None if the data was 0)
     """
     if data is None:
+        return data
+
+    if isinstance(data, (int, str, float)):
         return data
 
     return None if len(data) == 0 else data
@@ -412,6 +421,8 @@ def get_installed_power(specs: Dict[str, Any] | List[Dict], default: float = 0) 
         "installed_capacity",
         "installed_capacity_kW",
         "installed_capacity_MW",
+        "installed_capacity [kW]",
+        "installed_capacity [MW]",
         "installed capacity",
         "Installed capacity [MW]",
         "Installed capacity [KW]",
@@ -514,13 +525,18 @@ def do_nwp_check(radius: float, height: float) -> Tuple[bool, str]:
 
 def do_power_check(tower_power: float, type_power: float) -> Tuple[bool, str]:
     """Check if rated power of turbine and turbine type are reasonable."""
-    deltaR = abs(tower_power / type_power) - 1 if type_power > 0 else 0
+    if tower_power is None or tower_power == 0:
+        # Accept None or 0 rated power from tower, as it will be fallbacked by type power
+        return True, f"tower rated power of {tower_power} kW"
 
     if type_power < 0:
-        return False, f"rated power of {type_power} kW"
+        # Type rated power definitly out of range
+        return False, f"type rated power of {type_power} kW"
 
+    deltaR = abs(tower_power / type_power) - 1 if type_power > 0 else 0
     deltaA = abs(tower_power - type_power)
-    if type_power > 0 and ((deltaR > 0.075 and deltaA > 100) or deltaA > 250):
+
+    if type_power > 0 and ((deltaR > 0.075 and deltaA > 100) or deltaA > 400):
         return False, (
             f"substantial difference of {int(100*deltaR)}% "
             f"or {int(deltaA)}kW between "

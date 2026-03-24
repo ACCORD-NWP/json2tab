@@ -1,5 +1,6 @@
 """Module with enhanced model designation deriver."""
 
+import re
 from typing import Optional, Tuple
 
 from .logs import logger
@@ -25,16 +26,19 @@ class ModelDesignationDeriver:
             "wind_speeds": "wind_speeds_length",
         }
 
-    def get_specs(self, model_designation: str):
+    def get_specs(self, model_designation: str, row_data: Optional[dict] = None):
         """Get turbine type specification by model designation.
 
         Args:
             model_designation (str): The model_designation to get turbine type specs from
+            row_data (dict): Optional location specific properties for turbine type
 
         Returns:
             The turbine type specs or None
         """
-        _, line = self.by_turbine_type(model_designation, fields=["model_designation"])
+        _, line, _ = self.by_turbine_type(
+            model_designation, fields=["model_designation"], row_data=row_data
+        )
         if line is not None:
             return self.turbine_type_manager.get_specs_by_line_index(line)
 
@@ -67,149 +71,130 @@ class ModelDesignationDeriver:
         row_data_used = False
 
         if fields is None:
-            fields = ["type_id", "type_code", "turbine_model", "model_designation"]
+            fields = ["model_designation", "type_id", "type_code"]
 
-        if not sort_field:
-            if fields != ["model_designation"]:
-                sort_field = "model_designation"
-            else:
-                sort_field = "wind_speeds"
+        input_sort_field = sort_field
 
         links = []
 
         specs_df = self.turbine_type_manager.get_specs_dataframe(filtered=filtered)
 
+        # Remove all FO_00000 types, so model designation cannot introduce wf101-types
+        specs_df = specs_df[
+            ~(specs_df["model_designation"].str.match(r"FO_\d+", na=False))
+        ]
+
         for field in fields:
             if field in specs_df.columns:
+                sort_field = input_sort_field
+                if not sort_field:
+                    sort_field = (
+                        "model_designation"
+                        if field != "model_designation"
+                        else "wind_speeds"
+                    )
+
+                logger.debug(f"Search for {field} = {turbine_type}, sort: {sort_field}")
+
                 # Get model_designation from specs df
-                turbine_specs = specs_df[
+                specs = specs_df[
                     specs_df[field].astype(str).str.lower() == str(turbine_type).lower()
                 ]
 
-                if len(turbine_specs) == 0 and field == "model_designation":
-                    turbine_type_with_manufacturer_prefix = ensure_manufacturer_prefix(
-                        turbine_type
-                    )
-                    turbine_specs = specs_df[
+                # Allow on-the-fly generation of manufacturer prefix for model_designation
+                if len(specs) == 0 and field == "model_designation":
+                    type_with_prefix = ensure_manufacturer_prefix(turbine_type)
+                    specs = specs_df[
                         specs_df[field].astype(str).str.lower()
-                        == str(turbine_type_with_manufacturer_prefix).lower()
+                        == str(type_with_prefix).lower()
                     ]
 
-                if len(turbine_specs) > 0:
-                    logger.debug(
-                        f"Found {len(turbine_specs)} turbine specs with "
-                        f"{field}={turbine_type}"
-                    )
+                if len(specs) > 0:
+                    logger.debug(f"Found {len(specs)} specs with {field}={turbine_type}")
+
                     # Remove results with empty model_designation
-                    turbine_specs_filtered = turbine_specs[
-                        turbine_specs["model_designation"] != ""
-                    ]
-
-                    if len(turbine_specs_filtered) > 0:
-                        # We have still results if we remove the forbidden values,
-                        # so remove them
-                        turbine_specs = turbine_specs_filtered
+                    specs_filtered = specs[specs["model_designation"] != ""]
+                    if len(specs_filtered) > 0:
+                        specs = specs_filtered
                         logger.debug(
-                            f"Filtered results to {len(turbine_specs)} turbine specs "
-                            f"with {field}={turbine_type} and a given model_designation."
+                            f"Found {len(specs)} specs with {field}={turbine_type} "
+                            "and a given model_designation."
                         )
 
-                        if "is_manufacturer_data" in turbine_specs.columns:
-                            turbine_specs_filtered = turbine_specs[
-                                turbine_specs["is_manufacturer_data"] == True
-                            ]
-                            if len(turbine_specs_filtered) > 0:
-                                # We have still results
-                                # if we filter on only manufacturer data
-                                turbine_specs = turbine_specs_filtered
+                        # Filter on only manufacturer data, when possible
+                        if "is_manufacturer_data" in specs.columns:
+                            specs_filtered = specs[specs["is_manufacturer_data"] == True]
+                            if len(specs_filtered) > 0:
+                                specs = specs_filtered
                                 logger.debug(
-                                    f"Filtered results to {len(turbine_specs)} "
-                                    f"turbine specs with {field}={turbine_type} "
-                                    "and a given model_designation with ct/cp curves "
-                                    "from manufacterer."
+                                    f"Found {len(specs)} specs with "
+                                    f"{field}={turbine_type}, a given "
+                                    "model_designation, and manufacturer provided data."
                                 )
 
-                        if sort_field in self.precomputed_length_fields:
-                            turbine_specs = turbine_specs.sort_values(
-                                by=self.precomputed_length_fields[sort_field],
-                                ascending=False,
-                            )
-                        else:
-                            turbine_specs = turbine_specs.sort_values(
-                                by=sort_field,
-                                key=lambda x: x.str.len(),
-                                ascending=False,
-                            )
-
-                        model_designation = turbine_specs.iloc[0]["model_designation"]
-                        matched_line_index = turbine_specs.index.tolist()[0]
-
-                        if len(turbine_specs) > 1:
+                        if len(specs) > 1:
                             logger.debug(
-                                f"Model_designation = {model_designation} on line "
-                                f"{matched_line_index} is the richest result; "
+                                f"Sort {len(specs)} specs with "
+                                f"{field}={turbine_type} on {sort_field}, descending."
+                            )
+
+                            if sort_field in self.precomputed_length_fields:
+                                specs = specs.sort_values(
+                                    by=self.precomputed_length_fields[sort_field],
+                                    ascending=False,
+                                )
+                            else:
+                                specs = specs.sort_values(
+                                    by=sort_field,
+                                    key=lambda x: x.str.len(),
+                                    ascending=False,
+                                )
+
+                        # Select first resulting model designation
+                        model_designation = specs.iloc[0]["model_designation"]
+                        matched_line_index = specs.index.tolist()[0]
+
+                        if len(specs) > 1:
+                            logger.debug(
+                                f"Model_designation = '{model_designation}' on line "
+                                f"{matched_line_index} is the richest TOP-1 result; "
                                 f"i.e. value of {sort_field} is longest in length."
                             )
 
-                        is_enriched_model_designation = False
-
                         if (
-                            turbine_specs.iloc[0]["rated_power"] is None
-                            or float(turbine_specs.iloc[0]["rated_power"]) == 0
-                            or turbine_specs.iloc[0]["wind_speeds_length"] == 0
+                            specs.iloc[0]["wind_speeds_length"] == 0  # Type aliasses
+                            or specs.iloc[0]["rated_power"] is None  # FO_*-types
+                            or re.match(r"FO_\d+", model_designation)  # FO_*-types
+                            or re.match(r"FO_\d+", turbine_type)  # FO_*-types
                         ):
-                            # Try to enrich model_designation to get model_designation
-                            # with rated power or with wind_speeds
-                            (
-                                model_designation_rich,
-                                local_row_data_used,
-                            ) = self.enrich_model_designation(
-                                model_designation,
-                                additional_data=row_data,
-                                filtered=filtered,
-                            )
-                            if model_designation_rich != model_designation:
-                                model_designation = model_designation_rich
-                                is_enriched_model_designation = True
-                                row_data_used |= local_row_data_used
-
-                        if (
-                            not (
-                                field.lower() == "model_designation"
-                                and sort_field.lower() == "wind_speeds"
-                            )
-                            or is_enriched_model_designation
-                        ):
-                            logger.debug(
-                                f"Get richest wind_speeds dataset for "
-                                f"model_designation = {model_designation}."
-                            )
-                            # Get the entry for this model_designation with the
-                            # richest wind_speeds data
-                            return self.by_turbine_type(
-                                model_designation,
-                                fields=["model_designation"],
-                                sort_field="wind_speeds",
-                                filtered=filtered,
-                            )
-
-                        return model_designation, matched_line_index, row_data_used
+                            # Follow link
+                            if not (
+                                turbine_type == model_designation
+                                and field == ["model_designation"]
+                            ):
+                                return self.by_turbine_type(
+                                    model_designation,
+                                    fields=["model_designation"],
+                                    row_data=row_data,
+                                )
+                        else:
+                            return model_designation, matched_line_index, row_data_used
 
                     # This spec doesn't result in a model designation directly;
-                    # store it for further investigation if no direct matches
-                    # can be found
-                    links.append(
-                        {
+                    # store for further investigation if no direct matches can be found
+                    if len(specs) > 1:
+                        link = {
                             "field": field,
                             "turbine_type": turbine_type,
-                            "result": turbine_specs,
+                            "result": specs,
                         }
-                    )
+                        logger.debug(f"Added link; {link}")
+                        links.append(link)
 
         if links:
             logger.debug(
                 f"No direct match for a model designation found based on "
-                f"'{turbine_type}' in {fields}, but found potenitial links"
+                f"'{turbine_type}' in {fields}, but found {len(links)} potenitial links."
             )
 
         for link in links:
@@ -225,67 +210,75 @@ class ModelDesignationDeriver:
                             (
                                 model_designation,
                                 matched_line_index,
+                                row_data_used,
                             ) = self.by_turbine_type(
-                                new_turbine_type, fields=[field], filtered=filtered
+                                new_turbine_type,
+                                fields=[field],
+                                filtered=filtered,
+                                row_data=row_data,
                             )
 
                             if model_designation:
-                                return model_designation, matched_line_index
+                                return (
+                                    model_designation,
+                                    matched_line_index,
+                                    row_data_used,
+                                )
 
-        if not model_designation:
-            logger.debug(
-                f"Cannot find a valid model_designation from the specs table for "
-                f"turbine_type='{turbine_type}' in fields {fields}, "
-                "try to enrich turbine_type to model_designation with exact power match."
-            )
-            model_designation, local_row_data_used = self.enrich_model_designation(
-                turbine_type,
-                additional_data=row_data,
-                exact_power_match=True,
-                filtered=filtered,
-            )
+        # if not model_designation:
+        #     logger.debug(
+        #         f"Cannot find a valid model_designation from the specs table for "
+        #         f"turbine_type='{turbine_type}' in fields {fields}, "
+        #         "try to enrich turbine_type to model_designation with exact pwr match."
+        #     )
+        #     model_designation, local_row_data_used = self.enrich_model_designation(
+        #         turbine_type,
+        #         additional_data=row_data,
+        #         exact_power_match=True,
+        #         filtered=filtered,
+        #     )
 
-            # If enriching failed, try without an exact power match
-            if model_designation == turbine_type:
-                logger.debug(
-                    f"Cannot find a valid model_designation from the specs table for "
-                    f"turbine_type='{turbine_type}' in fields {fields}, try to enrich "
-                    f"turbine_type to model_designation with non-exact power match."
-                )
-                model_designation, _ = self.enrich_model_designation(
-                    turbine_type,
-                    additional_data=row_data,
-                    exact_power_match=False,
-                    filtered=filtered,
-                )
-                local_row_data_used = True
+        #     # If enriching failed, try without an exact power match
+        #     if model_designation == turbine_type:
+        #         logger.debug(
+        #             f"Cannot find a valid model_designation from the specs table for "
+        #             f"turbine_type='{turbine_type}' in fields {fields}, try to enrich "
+        #             f"turbine_type to model_designation with non-exact power match."
+        #         )
+        #         model_designation, _ = self.enrich_model_designation(
+        #             turbine_type,
+        #             additional_data=row_data,
+        #             exact_power_match=False,
+        #             filtered=filtered,
+        #         )
+        #         local_row_data_used = True
 
-            row_data_used |= local_row_data_used
+        #     row_data_used |= local_row_data_used
 
-            # If enriching still failed, no valid model_designation was found;
-            # don't restart by_turbine_type with already failed
-            # turbine_type
-            if model_designation == turbine_type:
-                model_designation = None
+        #     # If enriching still failed, no valid model_designation was found;
+        #     # don't restart by_turbine_type with already failed
+        #     # turbine_type
+        #     if model_designation == turbine_type:
+        #         model_designation = None
 
-            if model_designation:
-                (
-                    model_designation,
-                    matched_line_index,
-                    _,
-                ) = self.by_turbine_type(
-                    model_designation,
-                    fields=["model_designation"],
-                    sort_field="wind_speeds",
-                    filtered=filtered,
-                )
-                return model_designation, matched_line_index, row_data_used
+        #     if model_designation:
+        #         (
+        #             model_designation,
+        #             matched_line_index,
+        #             _,
+        #         ) = self.by_turbine_type(
+        #             model_designation,
+        #             fields=["model_designation"],
+        #             sort_field="wind_speeds",
+        #             filtered=filtered,
+        #         )
+        #         return model_designation, matched_line_index, row_data_used
 
-            logger.debug(
-                f"Cannot find a valid model_designation from the specs table for "
-                f"turbine_type='{turbine_type}' in fields {fields}, stop using "
-                f"turbine_type-based search on turbine_type={turbine_type}."
-            )
+        #     logger.debug(
+        #         f"Cannot find a valid model_designation from the specs table for "
+        #         f"turbine_type='{turbine_type}' in fields {fields}, stop using "
+        #         f"turbine_type-based search on turbine_type={turbine_type}."
+        #     )
 
         return model_designation, matched_line_index, row_data_used
 
@@ -320,7 +313,7 @@ class ModelDesignationDeriver:
         # just return input model_designation
         if not manufacturer and not diameter and not power:
             logger.debug(
-                f"Enriching failed due to missing filters; "
+                f"Enriching failed due to lack of filters; "
                 f"return input model_designation={model_designation}."
             )
             return model_designation, row_data_used
@@ -332,28 +325,27 @@ class ModelDesignationDeriver:
             ~(turbine_types["model_designation"].str.match(r"FO_\d+", na=False))
         ]
 
-        filter_string = ""
+        filter_str = ""
         if manufacturer_pattern:
             turbine_types = turbine_types[
                 turbine_types["manufacturer"].str.match(
                     manufacturer_pattern, case=False, na=False
                 )
             ]
-            filter_string = (
-                filter_string + f"manufacturer should match = {manufacturer_pattern}, "
-            )
+            filter_str += f"manufacturer should match = {manufacturer_pattern}, "
+
         elif manufacturer:
             turbine_types = turbine_types[
                 turbine_types["manufacturer"].str.lower() == str(manufacturer).lower()
             ]
-            filter_string = filter_string + f"manufacturer = {manufacturer}, "
+            filter_str += f"manufacturer = {manufacturer}, "
 
         if diameter:
             # Match on the approximate integer-values of the diameter
             turbine_types = turbine_types[
                 abs(turbine_types["diameter"].astype(float) - float(diameter)) < 5
             ]
-            filter_string = filter_string + f"diameter = {diameter} +/- 5, "
+            filter_str += f"diameter = {diameter} +/- 5, "
 
         if power and power > 0 and exact_power_match:
             thresshold = (float(power) / 750) / 100
@@ -362,130 +354,101 @@ class ModelDesignationDeriver:
                 / float(power)
                 < thresshold
             ]
-            filter_string = (
-                filter_string + f"power = {power} +/- {int(thresshold * 100)}%, "
-            )
+            filter_str += f"power = {power} +/- {int(thresshold * 100)}%, "
 
         if len(turbine_types) > 1:
-            turbine_types_positive_power = turbine_types[
-                turbine_types["rated_power"].astype(float) > 0
-            ]
-            if len(turbine_types_positive_power) > 0:
-                turbine_types = turbine_types_positive_power
-                filter_string = filter_string + "power > 0, "
+            filtered = turbine_types[turbine_types["rated_power"].astype(float) > 0]
+            if len(filtered) > 0:
+                turbine_types = filtered
+                filter_str += "power > 0, "
 
         if len(turbine_types) > 1:
-            turbine_types_with_ws = turbine_types[turbine_types["wind_speeds_length"] > 0]
-            if len(turbine_types_with_ws) > 0:
-                turbine_types = turbine_types_with_ws
-                filter_string = filter_string + "wind_speeds_length > 0, "
+            filtered = turbine_types[turbine_types["wind_speeds_length"] > 0]
+            if len(filtered) > 0:
+                turbine_types = filtered
+                filter_str += "wind_speeds_length > 0, "
 
         if len(turbine_types) > 1 and diameter:
             stricter_filter = None
             for thresshold in [3, 1]:
                 # Match on the integer-values of the diameter
-                turbine_types_prep = turbine_types[
+                filtered = turbine_types[
                     abs(turbine_types["diameter"].astype(float) - float(diameter))
                     < thresshold
                 ]
 
-                if len(turbine_types_prep) > 0:
-                    turbine_types = turbine_types_prep
+                if len(filtered) > 0:
+                    turbine_types = filtered
                     stricter_filter = thresshold
 
             if stricter_filter is not None:
-                filter_string += f"diameter = {diameter} +/- {stricter_filter}, "
+                filter_str += f"diameter = {diameter} +/- {stricter_filter}, "
 
         if len(turbine_types) > 1 and power and power > 0 and exact_power_match:
             thresshold = (float(power) / 750) / 100
             while len(turbine_types) > 1 and int(thresshold * 100) > 0:
-                thresshold /= 2
-                turbine_types_prep = turbine_types[
+                filtered = turbine_types[
                     abs(turbine_types["rated_power"].astype(float) - float(power))
                     / float(power)
                     < thresshold
                 ]
 
-                if len(turbine_types_prep) > 0:
-                    turbine_types = turbine_types_prep
+                if len(filtered) > 0:
+                    turbine_types = filtered
                     thresshold /= 2
-                    logger.debug(f"Set stronger thresshold={thresshold} for power delta")
                 else:
                     break
 
-            filter_string = (
-                filter_string + f"power = {power} +/- {int(thresshold * 100)}%, "
-            )
+            filter_str += f"power = {power} +/- {int(thresshold * 100)}%, "
 
-        if len(turbine_types) > 0 and power and not exact_power_match:
-            logger.debug(
-                f"Derterime possible model_designation based on "
-                f"{len(turbine_types)} turbine types with filters on "
-                f"{filter_string[:-2]}, power closest to {power}."
-            )
+        # Strip off final ', ' part of filter_str
+        if len(filter_str) > 2:
+            filter_str = filter_str[:-2]
 
-            # Add column power_delta;
-            # note this might raise an false positive SettingWithCopyWarning
-            turbine_types["power_delta"] = turbine_types["rated_power"].map(
-                lambda x: float(x) - float(power)
-            )
-            turbine_types = turbine_types.sort_values(by="power_delta", key=abs)
+        if len(turbine_types) == 1:
             model_designation_enriched = turbine_types.iloc[0]["model_designation"]
-            logger.debug(
-                f"Approximated model_designation='{model_designation}' "
-                f"by '{model_designation_enriched}'"
-            )
-        elif len(turbine_types) == 1:
-            logger.debug(
-                f"Found possible model_designation with filters on {filter_string[:-2]}."
-            )
-            model_designation_enriched = turbine_types.iloc[0]["model_designation"]
+
             logger.debug(
                 f"Enriched model_designation='{model_designation}' "
-                f"to '{model_designation_enriched}'"
+                f"to '{model_designation_enriched}' where {filter_str}."
             )
-
         elif len(turbine_types) > 1:
-            logger.debug(
-                f"Derterime possible model_designation based on {len(turbine_types)} "
-                f"turbines with filters on {filter_string[:-2]}."
-            )
-
-            # Get most frequent listed model_designation
-            modes = turbine_types["model_designation"].mode()
-
-            if len(modes) > 1:
-                additional_data_dict = additional_data
-                if not isinstance(additional_data_dict, dict):
-                    additional_data_dict = additional_data_dict.to_dict()
-
-                logger.debug(
-                    f"Found {len(modes)} possible model_designations; "
-                    f"all are most frequent in database based on parameters "
-                    f"given in {data} and {additional_data_dict}."
+            if power and not exact_power_match:
+                # This might raise a false positive SettingWithCopyWarning
+                turbine_types["power_delta"] = turbine_types["rated_power"].map(
+                    lambda x: float(x) - float(power)
                 )
-
-            if len(modes) > 0:
-                model_designation_enriched = modes.iloc[0]
+                turbine_types = turbine_types.sort_values(by="power_delta", key=abs)
+                model_designation_enriched = turbine_types.iloc[0]["model_designation"]
+                logger.debug(
+                    f"Approximated model_designation='{model_designation}' "
+                    f"by '{model_designation_enriched}' based on "
+                    f"{len(turbine_types)} turbine types with where "
+                    f"{filter_str}, power closest to {power}."
+                )
             else:
-                logger.debug(
-                    f"Found {len(modes)} possible mode model_designations for "
-                    f"{len(turbine_types['model_designation'])} found tubines."
-                )
-                logger.info(
-                    f"Cannot determine model_designation and return input "
-                    f"model_designation={model_designation}."
-                )
-                model_designation_enriched = model_designation
+                # Get most frequent listed model_designation
+                modes = turbine_types["model_designation"].mode()
 
-            logger.debug(
-                f"Enriched model_designation='{model_designation}' "
-                f"to '{model_designation_enriched}'"
-            )
+                if len(modes) > 0:
+                    model_designation_enriched = modes.iloc[0]
+                    logger.debug(
+                        f"Enriched model_designation='{model_designation}' to "
+                        f"'{model_designation_enriched}' based on {len(modes)} modal "
+                        f"turbine types where {filter_str}."
+                    )
+                else:
+                    logger.error("WHY ARE WE HERE?? (from enrich_model_designation)")
+                    model_designation_enriched = model_designation
+                    logger.debug(
+                        f"Cannot determine model_designation and return input "
+                        f"model_designation={model_designation}."
+                    )
+
         else:
             logger.debug(
                 f"Enriching failed due to too strict filters: "
-                f"{filter_string[:-2]}; "
+                f"{filter_str}; "
                 f"return input model_designation={model_designation}."
             )
             model_designation_enriched = model_designation

@@ -23,8 +23,12 @@ def csv_to_csv(
         output_filename: (Optional) csv-filename to write windturbine location data
         rename_rules:    Rename rules to rename columns in read data
         write_columns:   Column name and values to write in read data
+
     Returns:
         pandas.DataFrame with the written csv-file
+
+    Raises:
+        Exception: when convertion is failed
     """
     if output_filename is None:
         output_filename = generate_output_filename(input_filename, "csv")
@@ -50,3 +54,4 @@ def csv_to_csv(
         logger.exception(
             f"Failed to convert {input_filename} -> {output_filename}: {e!s}"
         )
+        raise e

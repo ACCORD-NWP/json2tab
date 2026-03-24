@@ -9,12 +9,17 @@ from scipy.spatial import KDTree
 
 from ..io.readers import read_locationdata_as_dataframe
 from ..io.writers import save_dataframe
-from ..location_converters.get_lat_lon_matrix import get_lat_lon_matrix
+from ..location_converters.get_lat_lon_matrix import get_lat_lon, get_lat_lon_matrix
 from ..location_converters.MergeStrategy import MergeStrategy
 from ..location_converters.MixStrategy import MixStrategy
 from ..logs import logger, logging
 from ..Turbine import Turbine
 from ..turbine_utils import datarow_to_turbine, merge_turbine_data
+
+try:
+    from geopy.distance import geodesic
+except ImportError:
+    geodesic = None
 
 
 def location_merger(
@@ -381,18 +386,17 @@ def get_nearest_turbine(
 
     if match.any():
         matched_turbine = df_file1.iloc[idx[match]]
-        try:
-            import geopy.distance
-
-            lat_lon = get_lat_lon_matrix(matched_turbine)
+        if geodesic is not None:
+            lat, lon = get_lat_lon(matched_turbine)
 
             coords_1 = (turbine.latitude, turbine.longitude)
-            coords_2 = (lat_lon[0][0], lat_lon[0][1])
+            coords_2 = (lat, lon)
 
-            dist = geopy.distance.geodesic(coords_1, coords_2).m
-        except Exception as e:
-            logger.exception(
-                f"Failed to compute distance between " f"requested point and match: {e!s}"
+            dist = geodesic(coords_1, coords_2).m
+        else:
+            logger.error(
+                "Failed to compute distance between requested point and match: "
+                "Module geopy.distance not loaded."
             )
             dist = None
         return df_file1.iloc[idx[match]], dist, tree

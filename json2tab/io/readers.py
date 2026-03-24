@@ -6,8 +6,17 @@ from typing import Optional
 
 import pandas as pd
 
+try:
+    import geopandas as gpd
+except ImportError:
+    gpd = None
+
+try:
+    from shapely.geometry import shape
+except ImportError:
+    shape = None
+
 from ..logs import logger
-from ..Turbine import Turbine
 
 
 def read_locationdata_as_dataframe(
@@ -24,6 +33,7 @@ def read_locationdata_as_dataframe(
 
     Returns:
         pandas.DataFrame with wind turbine location data
+
     """
     if ext is None:
         _, ext = os.path.splitext(input_filename)
@@ -39,6 +49,9 @@ def read_locationdata_as_dataframe(
 
     elif ext.lower() in ["txt", ".txt"]:
         data = read_locationdata_from_txt_as_dataframe(input_filename)
+
+    elif ext.lower() in ["shp", ".shp"]:
+        data = read_locationdata_from_shape_as_dataframe(input_filename)
 
     else:
         data = None
@@ -58,6 +71,9 @@ def read_locationdata_from_txt_as_dataframe(input_filename: str) -> pd.DataFrame
 
     Returns:
         pandas.DataFrame with wind turbine location data
+
+    Raises:
+        Exception: when reading data is failed
     """
     try:
         logger.debug(f"Read inputfile '{input_filename}' as wf101.txt-file")
@@ -84,8 +100,8 @@ def read_locationdata_from_txt_as_dataframe(input_filename: str) -> pd.DataFrame
         return data
 
     except Exception as e:
-        logger.error(f"Error reading TXT file: {e}")
-        logger.exception("Detailed error information:")
+        logger.exception(f"Error reading TXT file: {e}")
+        raise e
 
 
 def read_locationdata_from_tab_as_dataframe(input_filename: str) -> pd.DataFrame:
@@ -96,6 +112,9 @@ def read_locationdata_from_tab_as_dataframe(input_filename: str) -> pd.DataFrame
 
     Returns:
         pandas.DataFrame with wind turbine location data
+
+    Raises:
+        Exception: when reading data is failed
     """
     try:
         logger.debug(f"Read inputfile '{input_filename}' as tab-file")
@@ -113,8 +132,8 @@ def read_locationdata_from_tab_as_dataframe(input_filename: str) -> pd.DataFrame
         return data
 
     except Exception as e:
-        logger.error(f"Error reading TAB file: {e}")
-        logger.exception("Detailed error information:")
+        logger.exception(f"Error reading TAB file: {e}")
+        raise e
 
 
 def read_locationdata_from_csv_as_dataframe(input_filename: str) -> pd.DataFrame:
@@ -125,6 +144,9 @@ def read_locationdata_from_csv_as_dataframe(input_filename: str) -> pd.DataFrame
 
     Returns:
         pandas.DataFrame with wind turbine location data
+
+    Raises:
+        Exception: when reading data is failed
     """
     try:
         logger.debug(f"Read inputfile '{input_filename}' as csv-file")
@@ -140,9 +162,51 @@ def read_locationdata_from_csv_as_dataframe(input_filename: str) -> pd.DataFrame
         logger.info(f"Loaded {len(data.index)} turbines from {input_filename}")
         return data
 
+    except pd.errors.EmptyDataError:
+        logger.warning(f"Empty data error for reading CSV file {input_filename}.")
+        return None
     except Exception as e:
-        logger.error(f"Error reading CSV file: {e}")
-        logger.exception("Detailed error information:")
+        logger.exception(f"Error reading CSV file: {e}")
+        raise e
+
+
+def read_locationdata_from_shape_as_dataframe(input_filename: str) -> pd.DataFrame:
+    """Reads dataframe with wind turbine location data from a shape file.
+
+    Args:
+        input_filename (str): Filename with wind turbine location data
+
+    Returns:
+        pandas.DataFrame with wind turbine location data
+
+    Raises:
+        Exception: when reading data is failed
+    """
+    if gpd is None:
+        logger.error("Missing python packages: 'geopandas' not found.")
+        logger.error(
+            "Please run '"
+            "poetry install --with geojson"
+            "' to install the necessary packages for loading shapefiles."
+        )
+
+        logger.warning("Skip reading data from Shape-file.")
+
+        return None
+
+    try:
+        logger.debug(f"Read inputfile '{input_filename}' as shape-file")
+        data = gpd.read_file(input_filename)
+
+        if "source" not in data.columns:
+            _, data["source"] = os.path.split(input_filename)
+
+        logger.info(f"Loaded {len(data.index)} turbines from {input_filename}")
+        return data
+
+    except Exception as e:
+        logger.exception(f"Error reading Shape-file: {e}")
+        raise e
 
 
 def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataFrame:
@@ -153,6 +217,9 @@ def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataF
 
     Returns:
         pandas.DataFrame with wind turbine location data
+
+    Raises:
+        Exception: when reading data is failed
     """
     try:
         logger.debug(f"Read inputfile '{input_filename}' as geojson-file")
@@ -176,7 +243,15 @@ def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataF
             turbines = []
             for element in elements:
                 props = element.get("properties") if "properties" in element else element
-                turbines.append(Turbine.from_dict(props))
+
+                geometry = element.get("geometry") if "geometry" in element else None
+                if geometry is not None and shape is not None:
+                    geometry = shape(geometry)
+
+                if "geometry" not in props or props["geometry"] is None:
+                    props["geometry"] = geometry
+
+                turbines.append(props)
 
             data_df = pd.DataFrame(turbines)
 
@@ -187,8 +262,8 @@ def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataF
             return data_df
 
     except Exception as e:
-        logger.error(f"Error reading GeoJSON file: {e}")
-        logger.exception("Detailed error information:")
+        logger.exception(f"Error reading GeoJSON file: {e}")
+        raise e
 
 
 def parse_rules(rules: str | dict) -> dict:

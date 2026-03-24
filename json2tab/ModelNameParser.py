@@ -85,6 +85,8 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>Tacke)\s+(TW|WR|TZ)\s?(?P<power>\d+(\.\d+))[a-z]+",
         # BARD pattern (eg BARD  6.5, BARD  VM)
         r"(?P<manufacturer>BARD) (?P<power>(\d+(\.\d+)?)|V)M?",
+        # Seawind (eg Seawind  18 - 260)
+        r"(?P<manufacturer>Seawind) (?P<powerMW>\d+(\.\d)?)(MW)?(\s?-\s?(?P<diameter>\d+))?",
         # GE/Enron pattern (eg General Electric  GE 3.2 -103, GE General Electric  GE 3.4-137, GE General Electric  GE 3.6s, Cypress 6.0-164)
         r"(?P<manufacturer>(GE General Electric)|(General Electric)|GE|Enron|Cypress)(\s+(Wind|Energy|EN|GE|Haliade|Haliade-X))?(\s|-)(?P<power>\d+(\.\d+)?)\s?((-(?P<power_max>\d+(\.\d+)?))?-\s?(?P<diameter>\d+(\.\d+)?)?)?w*",
         # NEG Micon pattern (eg NEG Micon  NM 43/600, NEG Micon  NM 54/950 )

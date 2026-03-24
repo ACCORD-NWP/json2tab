@@ -214,9 +214,8 @@ class TurbineTypeTabFileWriter:
                 power_values = [power / 1000 for power in power_values]
                 max_power_curve_old = max_power_curve
                 max_power_curve /= 1000
-                logger.info(
+                logger.debug(
                     "Found inconsistency between "
-                    ""
                     f"max(power_curve)={max_power_curve_old} and "
                     f"rated_power={rated_power_spec_kw}. "
                     "The power curve is scaled back by a factor 1000 such that "

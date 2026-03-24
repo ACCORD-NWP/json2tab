@@ -85,6 +85,6 @@ def united_kingdom(
         ):
             turbines.append(turbine)
 
-    data = pd.DataFrame(turbines)
+    data = pd.DataFrame([t.to_dict() for t in turbines])
     save_dataframe(data, output_filename)
     return data

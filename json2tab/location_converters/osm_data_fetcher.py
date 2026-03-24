@@ -4,12 +4,19 @@ import contextlib
 import json
 import os
 import re
+import time
 
 try:
     import requests
 except ImportError:
     requests = None
 from typing import Optional, Tuple
+
+try:
+    import shapely
+except ImportError:
+    shapely = None
+
 
 import pandas as pd
 
@@ -57,39 +64,46 @@ def osm_data_fetcher(
     output_filename_turbine = f"{output_filename_base}.turbines.csv"
     output_filename_windfarm = f"{output_filename_base}.windfarms.csv"
 
-    if requests is not None:
-        if not os.path.exists(output_filename):
-            data = None
+    if os.path.exists(output_filename):
+        logger.info("Found existing output file; just reload it.")
+        data = read_locationdata_as_dataframe(output_filename)
+    else:
+        logger.debug("Output file not found; collect and process data for it.")
+        data = None
 
-            if input_filename is not None and os.path.exists(input_filename):
-                logger.debug(
-                    f"Process inputfile '{input_filename}' as Overpass API results"
-                )
-                with open(input_filename, "r") as input_file:
-                    data = json.load(input_file)
+        if input_filename is not None and os.path.exists(input_filename):
+            logger.debug(f"Process inputfile '{input_filename}' as Overpass API results")
+            with open(input_filename, "r") as input_file:
+                data = json.load(input_file)
 
-            if data is None and os.path.exists(overpass_dump_file):
-                logger.debug(
-                    f"Process dumpfile '{overpass_dump_file}' as Overpass API results"
-                )
-                with open(overpass_dump_file, "r") as input_file:
-                    data = json.load(input_file)
+        if data is None and os.path.exists(overpass_dump_file):
+            logger.debug(
+                f"Process dumpfile '{overpass_dump_file}' as Overpass API results"
+            )
+            with open(overpass_dump_file, "r") as input_file:
+                data = json.load(input_file)
 
-            if not data:
-                # Overpass API URL
-                overpass_url = "http://overpass-api.de/api/interpreter"
-                logger.debug(f"Using overpass API url: '{overpass_url}'")
+        if not data:
+            # Overpass API URL
+            overpass_url = "http://overpass-api.de/api/interpreter"
+            logger.debug(f"Using overpass API url: '{overpass_url}'")
 
-                # Overpass QL query for wind turbines and windfarms
-                overpass_query = build_query(
-                    windturbine=query_windturbine, windfarm=query_windfarm
-                )
-                logger.debug(f"Using overpass query: '{overpass_query}'")
+            # Overpass QL query for wind turbines and windfarms
+            overpass_query = build_query(
+                windturbine=query_windturbine, windfarm=query_windfarm
+            )
+            logger.debug(f"Using overpass query: \n===\n{overpass_query}\n===\n")
 
-                print("Executing request to fetch OSM data...")
+            print("Executing request to fetch OSM data...")
 
+            if requests is not None:
+                start_time = time.time()
                 response = requests.get(overpass_url, params={"data": overpass_query})
+                logger.info(f"Got response after {time.time() - start_time} seconds.")
                 data = response.json()
+                duration = time.time() - start_time
+                logger.info(f"Got json data after {duration} seconds.")
+                print(f"... got response for query after {duration} seconds.")
 
                 # Dump overpass api response data to file
                 with open(overpass_dump_file, "w") as dump_file:
@@ -98,196 +112,191 @@ def osm_data_fetcher(
                         f"Dumped overpass query output to '{overpass_dump_file}'"
                     )
 
-                print("... got response for query")
-
-            if not data:
-                logger.error("No data to process, reading aborted.")
-                return None
-
-            # Initialize a list to hold the data
-            turbines = []
-            windfarms = []
-
-            logger.info(f"Received {len(data['elements'])} elements")
-
-            osm_types = ["relation", "node", "way"]
-            elements = {}
-
-            for osm_type in osm_types:
-                elements[osm_type] = [
-                    nwr for nwr in data["elements"] if nwr["type"] == osm_type
-                ]
-                logger.info(f"Found {len(elements[osm_type])} {osm_type}s in data")
-
-            elements["node_wo_tags"] = [
-                n for n in elements["node"] if n.get("tags") is None
-            ]
-            logger.info(f"Found {len(elements['node_wo_tags'])} nodes w/o tags in data")
-
-            # Process each element, grouped by osm_type
-            for osm_type in osm_types:
-                logger.info(f"Start processing osm type {osm_type}")
-
-                element_counter = 0
-                for element in elements[osm_type]:
-                    element_counter += 1
-                    print_processing_status(
-                        element_counter,
-                        len(elements[osm_type]),
-                        f"Processing OSM elements of type {osm_type}",
-                    )
-
-                    if element.get("tags") is None:
-                        if element.get("windturbine_via_wf"):
-                            element["tags"] = {}
-                        else:
-                            # Skip elements without tags
-                            continue
-
-                    # Basic turbine information
-                    osm_id = get_osm_id(element)
-                    name = get_osm_name(element)
-
-                    # Parse manufacturer and turbine type model
-                    manufacturer = element["tags"].get("manufacturer")
-                    model_type = get_model_type_from_element(element)
-
-                    # Parse wind turbine specs
-                    hub_height = get_hub_height_from_element(element)
-                    rotor_diameter = parse_length(element["tags"].get("rotor:diameter"))
-                    rated_power = parse_power_to_kw(
-                        element["tags"].get("generator:output:electricity")
-                    )
-
-                    if isinstance(rotor_diameter, str):
-                        logger.warning(
-                            f"Failed to parse rotor_diameter='{rotor_diameter}' as "
-                            f"valid diameter for {osm_id}"
-                        )
-                        rotor_diameter = None
-
-                    # Parse some additional optional information
-                    operator = element["tags"].get("operator")
-                    start_date = element["tags"].get("start_date")
-                    site = element["tags"].get("site")
-                    is_offshore = element["tags"].get("offshore")
-
-                    # Read more data from linked wind_farm
-                    windfarm_osm_id = element.get("windfarm_osm_id")
-                    if windfarm_osm_id is not None:
-                        windfarm = get_element_by_id(
-                            elements, "relation", windfarm_osm_id
-                        )
-
-                        if windfarm is not None:
-                            if site is None:
-                                site = get_osm_name(windfarm)
-
-                            # Append relation info
-                            site = f"{site} [{get_osm_id(windfarm)}]"
-                            manufacturer = manufacturer or windfarm["tags"].get(
-                                "manufacturer"
-                            )
-                            model_type = model_type or get_model_type_from_element(
-                                windfarm
-                            )
-                            hub_height = hub_height or get_hub_height_from_element(
-                                windfarm
-                            )
-                            rated_power = rated_power or element.get("rated_power_via_wf")
-                            start_date = start_date or windfarm["tags"].get("start_date")
-
-                    turbine = Turbine(
-                        turbine_id=osm_id,
-                        name=name,
-                        latitude=None,  # lat/lon set before adding to turbine line
-                        longitude=None,  # lat/lon set before adding to turbine line
-                        manufacturer=manufacturer,
-                        type=model_type,
-                        hub_height=hub_height,
-                        radius=float(rotor_diameter) / 2
-                        if rotor_diameter is not None
-                        else None,
-                        diameter=rotor_diameter,
-                        power_rating=rated_power,
-                        operator=operator,
-                        start_date=start_date,
-                        wind_farm=site,
-                        is_offshore=is_offshore,
-                        source="OSM",
-                    )
-
-                    if is_windturbine(element) and element["type"] == "relation":
-                        # Don't trust this element as windturbine, process as windfarm
-                        windfarm = process_wf_info(turbine.to_dict(), element, elements)
-
-                        # Append to the windfarm list
-                        windfarms.append(windfarm)
-
-                    elif is_windturbine(element) or element.get("windturbine_via_wf"):
-                        if not is_windturbine(element):
-                            logger.info(
-                                f"Interpreted node '{turbine.name}' ({osm_id}) "
-                                "as windturbine due to its wind_turbine "
-                                f"relation to '{turbine.wind_farm}'"
-                            )
-
-                        # Add location information
-                        turbine.latitude, turbine.longitude = get_lat_lon_from_element(
-                            element, elements
-                        )
-
-                        # Append to the windturbine list
-                        turbines.append(turbine)
-
-                    elif (
-                        element["tags"].get("power") == "plant"
-                        and element["tags"].get("plant:source") == "wind"
-                    ):
-                        # Parse windfarm information
-                        windfarm = process_wf_info(turbine.to_dict(), element, elements)
-
-                        # Append to the windfarm list
-                        windfarms.append(windfarm)
-
-            # Create a DataFrame with turbines
-            df_turbines = pd.DataFrame(turbines)
-            logger.info(f"Generated dataframe with {len(df_turbines.index)} turbines")
-            if len(df_turbines.index) > 0:
-                save_dataframe(df_turbines, output_filename_turbine)
-
-            if len(windfarms) > 0 or query_windfarm:
-                df_windfarms = pd.DataFrame(windfarms)
-                logger.info(
-                    f"Generated dataframe with {len(df_windfarms.index)} "
-                    f"windfarms with "
-                    f"{int(sum(df_windfarms['n_turbines'].fillna(0)))} turbines "
-                    f"({int(sum(df_windfarms['mapped_turbines'].fillna(0)))} "
-                    "included in turbines)."
+            else:
+                print(
+                    "Python package 'requests' not found, "
+                    "please load this optional package to run OSM data request."
                 )
-                save_dataframe(df_windfarms, output_filename_windfarm)
+                print("Please run")
+                print("    poetry install --with osmrequest")
+                print("to install the necessary packages for OsmDataFetcher")
 
-            save_dataframe(df_turbines, output_filename)
-            data = df_turbines
+        if not data:
+            logger.error("No data to process, reading aborted.")
+            return None
 
-        else:
-            data = read_locationdata_as_dataframe(output_filename)
+        # Initialize a list to hold the data
+        turbines = []
+        windfarms = []
 
-        return data
+        logger.info(f"Received {len(data['elements'])} elements")
 
-    print(
-        "Python package 'requests' not found, "
-        "please load this optional package to run OsmDataFetcher."
-    )
-    print("Please run")
-    print("    poetry install --with osmrequest")
-    print("to install the necessary packages for OsmDataFetcher")
+        osm_types = ["relation", "node", "way"]
+        elements = {}
 
-    return None
+        for osm_type in osm_types:
+            elements[osm_type] = [
+                nwr for nwr in data["elements"] if nwr["type"] == osm_type
+            ]
+            logger.info(f"Found {len(elements[osm_type])} {osm_type}s in data")
+
+        # Setup dictionary with elements by id
+        elements["by_id"] = {}
+        for nwr in data["elements"]:
+            elements["by_id"][nwr["id"]] = nwr
+
+        # Process each element, grouped by osm_type
+        for osm_type in osm_types:
+            logger.info(f"Start processing osm type {osm_type}")
+
+            element_counter = 0
+            for element in elements[osm_type]:
+                element_counter += 1
+                print_processing_status(
+                    element_counter,
+                    len(elements[osm_type]),
+                    f"Processing OSM elements of type {osm_type}",
+                )
+
+                if element.get("tags") is None:
+                    if element.get("windturbine_via_wf"):
+                        element["tags"] = {}
+                    else:
+                        # Skip elements without tags
+                        continue
+
+                # Basic turbine information
+                osm_id = get_osm_id(element)
+                name = get_osm_name(element)
+
+                # Parse manufacturer and turbine type model
+                manufacturer = element["tags"].get("manufacturer")
+                model_type = get_model_type_from_element(element)
+
+                # Parse wind turbine specs
+                hub_height = get_hub_height_from_element(element)
+                rotor_diameter = parse_length(element["tags"].get("rotor:diameter"))
+                rated_power = parse_power_to_kw(
+                    element["tags"].get("generator:output:electricity")
+                )
+
+                if isinstance(rotor_diameter, str):
+                    logger.warning(
+                        f"Failed to parse rotor_diameter='{rotor_diameter}' as "
+                        f"valid diameter for {osm_id}"
+                    )
+                    rotor_diameter = None
+
+                # Parse some additional optional information
+                operator = element["tags"].get("operator")
+                start_date = element["tags"].get("start_date")
+                site = element["tags"].get("site")
+                is_offshore = element["tags"].get("offshore")
+
+                # Read more data from linked wind_farm
+                windfarm_osm_id = element.get("windfarm_osm_id")
+                if windfarm_osm_id is not None:
+                    # windfarm = get_element_by_id(elements, "relation", windfarm_osm_id)
+                    windfarm = elements["by_id"][windfarm_osm_id]
+
+                    if windfarm is not None:
+                        if site is None:
+                            site = get_osm_name(windfarm)
+
+                        # Append relation info
+                        site = f"{site} [{get_osm_id(windfarm)}]"
+                        manufacturer = manufacturer or windfarm["tags"].get(
+                            "manufacturer"
+                        )
+                        model_type = model_type or get_model_type_from_element(windfarm)
+                        hub_height = hub_height or get_hub_height_from_element(windfarm)
+                        rated_power = rated_power or element.get("rated_power_via_wf")
+                        start_date = start_date or windfarm["tags"].get("start_date")
+
+                turbine = Turbine(
+                    turbine_id=osm_id,
+                    name=name,
+                    latitude=None,  # lat/lon set before adding to turbine line
+                    longitude=None,  # lat/lon set before adding to turbine line
+                    manufacturer=manufacturer,
+                    type=model_type,
+                    hub_height=hub_height,
+                    radius=float(rotor_diameter) / 2
+                    if rotor_diameter is not None
+                    else None,
+                    diameter=rotor_diameter,
+                    power_rating=rated_power,
+                    operator=operator,
+                    start_date=start_date,
+                    wind_farm=site,
+                    is_offshore=is_offshore,
+                    source="OSM",
+                )
+
+                if is_windturbine(element) and element["type"] == "relation":
+                    # Don't trust this element as windturbine, process as windfarm
+                    windfarm = process_wf_info(turbine, element, elements)
+
+                    # Append to the windfarm list
+                    windfarms.append(windfarm)
+
+                elif is_windturbine(element) or element.get("windturbine_via_wf"):
+                    if not is_windturbine(element):
+                        logger.info(
+                            f"Interpreted node '{turbine.name}' ({osm_id}) "
+                            "as windturbine due to its wind_turbine "
+                            f"relation to '{turbine.wind_farm}'"
+                        )
+
+                    # Add location information
+                    shape = get_shape_from_element(element, elements)
+                    if shapely is not None:
+                        turbine.geometry = shape.centroid
+                        shape = (turbine.geometry.x, turbine.geometry.y)
+
+                    turbine.longitude, turbine.latitude = shape
+
+                    # Append to the windturbine list
+                    turbines.append(turbine)
+
+                elif (
+                    element["tags"].get("power") == "plant"
+                    and element["tags"].get("plant:source") == "wind"
+                ):
+                    # Parse windfarm information
+                    windfarm = process_wf_info(turbine, element, elements)
+
+                    # Append to the windfarm list
+                    windfarms.append(windfarm)
+
+        # Create a DataFrame with turbines
+        df_turbines = pd.DataFrame([t.to_dict() for t in turbines])
+        logger.info(f"Generated dataframe with {len(df_turbines.index)} turbines")
+        if len(df_turbines.index) > 0:
+            save_dataframe(df_turbines, output_filename_turbine)
+
+        if len(windfarms) > 0 or query_windfarm:
+            df_windfarms = pd.DataFrame(windfarms)
+            logger.info(
+                f"Generated dataframe with {len(df_windfarms.index)} "
+                f"windfarms with "
+                f"{int(sum(df_windfarms['n_turbines'].fillna(0)))} turbines "
+                f"({int(sum(df_windfarms['mapped_turbines'].fillna(0)))} "
+                "included in turbines)."
+            )
+            save_dataframe(df_windfarms, output_filename_windfarm)
+
+        save_dataframe(df_turbines, output_filename)
+        data = df_turbines
+
+    return data
 
 
 def process_wf_info(windfarm, element, elements):
     """Process windfarm info from osm element."""
+    if isinstance(windfarm, Turbine):
+        windfarm = windfarm.to_dict()
+
     n_turbines = parse_turbines_from_str(element["tags"].get("seamark:information"))
 
     if n_turbines is not None and not isinstance(n_turbines, int):
@@ -306,27 +315,25 @@ def process_wf_info(windfarm, element, elements):
 
     if element["type"] == "relation":
         if is_windturbine(element):
-            node_ids = [mbr["ref"] for mbr in element["members"] if mbr["type"] == "node"]
-            way_ids = [mbr["ref"] for mbr in element["members"] if mbr["type"] == "way"]
-            wf_turbines = [n for n in elements["node"] if n["id"] in set(node_ids)] + [
-                w for w in elements["way"] if w["id"] in set(way_ids)
-            ]
+            node_ids = {mbr["ref"] for mbr in element["members"] if mbr["type"] == "node"}
+            way_ids = {mbr["ref"] for mbr in element["members"] if mbr["type"] == "way"}
+            wf_turbines = [elements["by_id"][node_id] for node_id in node_ids | way_ids]
         else:
-            wf_ids = [
+            wf_ids = {
                 mbr["ref"]
                 for mbr in element["members"]
                 if mbr["type"] == "node" and mbr["role"] in ["generator", "wind_turbine"]
-            ]
-            mbr_ids = [
+            }
+
+            mbr_ids = {
                 mbr["ref"]
                 for mbr in element["members"]
-                if mbr["type"] == "node" and mbr["role"] in ["", "inner", "node"]
-            ]
-            wf_turbines = [
-                n
-                for n in elements["node"]
-                if n["id"] in set(mbr_ids) and is_windturbine(n) or n["id"] in set(wf_ids)
-            ]
+                if mbr["type"] == "node"
+                and mbr["role"] in ["", "inner", "node"]
+                and is_windturbine(elements["by_id"][mbr["ref"]])
+            }
+
+            wf_turbines = [elements["by_id"][node_id] for node_id in wf_ids | mbr_ids]
 
         n_turbines = len(wf_turbines)
         mapped_turbines = n_turbines
@@ -411,9 +418,8 @@ def process_wf_info(windfarm, element, elements):
 
     if mapped_turbines != n_turbines:
         # Add location for this windfarm
-        windfarm["latitude"], windfarm["longitude"] = get_lat_lon_from_element(
-            element, elements
-        )
+        windfarm["geometry"] = get_shape_from_element(element, elements)
+        logger.debug(f"shape = {windfarm['geometry']}")
 
     return windfarm
 
@@ -437,16 +443,19 @@ def get_osm_name(element) -> str:
     return name
 
 
-def get_lat_lon_from_element(element, elements) -> Tuple[float, float]:
+def get_shape_from_element(element, elements) -> Tuple[float, float]:
     """Gets lat/lon from OSM element."""
     if element["type"] == "node":
-        return get_lat_lon_from_node(element)
+        return get_point_from_node(element)
 
     if element["type"] == "way":
-        return get_lat_lon_from_way(element, elements)
+        return get_shape_from_way(element, elements)
 
     if element["type"] == "relation":
-        return get_lat_lon_from_relation(element, elements)
+        return get_shape_from_relation(element, elements)
+
+    if shapely is not None:
+        return shapely.geometry.Point(None, None)
 
     return None, None
 
@@ -480,63 +489,65 @@ def get_hub_height_from_element(element) -> float:
     return hub_height
 
 
-def get_lat_lon_from_node(node) -> Tuple[float, float]:
+def get_point_from_node(node) -> Tuple[float, float]:
     """Gets lat/lon from OSM node."""
     lat = node.get("lat")
     lon = node.get("lon")
 
+    if shapely is not None:
+        return shapely.geometry.Point(lon, lat)
+
     return lat, lon
 
 
-def get_lat_lon_from_way(way, elements) -> Tuple[float, float]:
+def get_shape_from_way(way, elements):
     """Gets lat/lon from OSM way."""
-    # Fix lat/lon of way by taking the average of the lat/lons of nodes
-    nodes = [n for n in elements["node_wo_tags"] if n["id"] in set(way["nodes"])]
-    if len(nodes) != len(set(way["nodes"])):
-        nodes = [n for n in elements["node"] if n["id"] in set(way["nodes"])]
+    nodes = [elements["by_id"][node_id] for node_id in set(way["nodes"])]
+    points = [get_point_from_node(node) for node in nodes]
 
-    lat_lon = [get_lat_lon_from_node(node) for node in nodes]
-
-    lat = sum(lat for lat, lon in lat_lon) / len(nodes) if len(nodes) > 0 else None
-    lon = sum(lon for lat, lon in lat_lon) / len(nodes) if len(nodes) > 0 else None
+    if shapely is not None:
+        points = shapely.geometry.MultiPoint(points)
+        lon = points.centroid.x
+        lat = points.centroid.y
+    else:
+        # Fix lat/lon of way by taking the average of the lat/lons of nodes
+        lon = sum(lon for lon, lat in points) / len(nodes) if len(nodes) > 0 else None
+        lat = sum(lat for lon, lat in points) / len(nodes) if len(nodes) > 0 else None
+        points = (lat, lon)
 
     logger.debug(
         f"Defined lat/lon coordinates for {get_osm_id(way)} "
         f"based on {len(nodes)} nodes; lat={lat}, lon={lon}"
     )
 
-    return lat, lon
+    return points
 
 
-def get_element_by_id(elements, osm_type, elemet_id):
-    """Get osm element from elements libary by id."""
-    result = [nwr for nwr in elements[osm_type] if nwr["id"] == elemet_id]
-    if len(result) > 0:
-        return result[0]
-
-    return None
-
-
-def get_lat_lon_from_relation(relation, elements) -> Tuple[float, float]:
+def get_shape_from_relation(relation, elements):
     """Gets lat/lon from OSM relation."""
     # Fix lat/lon of relation by taking the average of the lat/lons of members
-    way_ids = [mbr["ref"] for mbr in relation["members"] if mbr["type"] == "way"]
-    node_ids = [mbr["ref"] for mbr in relation["members"] if mbr["type"] == "node"]
+    mbr_ids = {
+        mbr["ref"] for mbr in relation["members"] if mbr["type"] in ["way", "node"]
+    }
+    members = [elements["by_id"][node_id] for node_id in mbr_ids]
 
-    ways = [w for w in elements["way"] if w["id"] in set(way_ids)]
-    nodes = [n for n in elements["node"] if n["id"] in set(node_ids)]
-    members = ways + nodes
+    shape = [get_shape_from_element(mbr, elements) for mbr in members]
 
-    lat_lon = [get_lat_lon_from_element(mbr, elements) for mbr in members]
-    lat = sum(lat for lat, lon in lat_lon) / len(members) if len(members) > 0 else None
-    lon = sum(lon for lat, lon in lat_lon) / len(members) if len(members) > 0 else None
+    if shapely is not None:
+        shape = shapely.geometry.MultiPolygon(shape)
+        lon = shape.centroid.x
+        lat = shape.centroid.y
+    else:
+        lon = sum(lon for lat, lon in shape) / len(members) if len(members) > 0 else None
+        lat = sum(lat for lat, lon in shape) / len(members) if len(members) > 0 else None
+        shape = (lat, lon)
 
     logger.debug(
         f"Defined lat/lon coordinates for {get_osm_id(relation)} "
         f"based on {len(members)} members; lat={lat}, lon={lon}"
     )
 
-    return lat, lon
+    return shape
 
 
 def parse_length(length_str: str):

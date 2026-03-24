@@ -24,6 +24,9 @@ def convert_between_csv_geojson(
 
     Returns:
         pandas.DataFrame with csv file data
+
+    Raises:
+        Exception: when convertion is failed
     """
     if output_filename is None:
         _, input_ext = os.path.splitext(input_filename)
@@ -39,3 +42,4 @@ def convert_between_csv_geojson(
         logger.exception(
             f"Failed to convert {input_filename} -> {output_filename}: {e!s}"
         )
+        raise e

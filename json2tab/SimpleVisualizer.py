@@ -46,33 +46,37 @@ class SimpleVisualizer:
         mpl.rcParams["font.sans-serif"] = ["DejaVu Sans"]
 
         try:
+            proj = ccrs.PlateCarree()
+
             # Create figure with specified size
             fig, ax = plt.subplots(
-                figsize=(12, 8), subplot_kw={"projection": ccrs.PlateCarree()}, dpi=300
+                figsize=(12, 8), subplot_kw={"projection": proj}, dpi=300
             )
 
             # Add map features with improved styling
             ax.add_feature(cfeature.LAND, facecolor="#f2f2f2")
             ax.add_feature(cfeature.OCEAN, facecolor="#ffffff")
+            ax.add_feature(cfeature.LAKES, facecolor="#fcfcfc")
             ax.add_feature(cfeature.COASTLINE, edgecolor="#404040", linewidth=0.5)
             ax.add_feature(
                 cfeature.BORDERS, linestyle=":", linewidth=0.5, edgecolor="#606060"
             )
 
-            # Plot turbines
-            turbine_lons = turbines["longitude"].tolist()
-            turbine_lats = turbines["latitude"].tolist()
+            if len(turbines) > 0:
+                # Plot turbines
+                turbine_lons = turbines["longitude"].tolist()
+                turbine_lats = turbines["latitude"].tolist()
 
-            # Plot all turbines at once for better performance
-            ax.plot(
-                turbine_lons,
-                turbine_lats,
-                "o",
-                color="#ff4444",
-                markersize=3,
-                transform=ccrs.PlateCarree(),
-                label="Turbines",
-            )
+                # Plot all turbines at once for better performance
+                ax.plot(
+                    turbine_lons,
+                    turbine_lats,
+                    "o",
+                    color="#ff4444",
+                    markersize=3,
+                    transform=proj,
+                    label="Turbines",
+                )
 
             if self.domain_handler:
                 # Plot domain boundary
@@ -84,7 +88,7 @@ class SimpleVisualizer:
                         "--",
                         color="#202020",
                         linewidth=1.5,
-                        transform=ccrs.PlateCarree(),
+                        transform=proj,
                         label="Domain",
                         dashes=(5, 5),
                     )

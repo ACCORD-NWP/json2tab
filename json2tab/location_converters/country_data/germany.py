@@ -81,16 +81,13 @@ def germany(
         )
 
         if (
-            (
-                turbine.latitude == turbine.latitude
-                and turbine.longitude == turbine.longitude
-            )
+            turbine.is_valid()
             and turbine.start_date is not None
             and turbine.start_date != ""
         ):
             turbines.append(turbine)
 
-    data = pd.DataFrame(turbines)
+    data = pd.DataFrame([t.to_dict() for t in turbines])
     save_dataframe(data, output_filename)
     return data
 

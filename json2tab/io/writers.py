@@ -44,6 +44,9 @@ def save_dataframe(
 
     formats = parse_ext_string_to_list(formats)
 
+    if "_geometry" in dataframe.columns:
+        dataframe = dataframe.drop(columns=["_geometry"])
+
     for ext in formats:
         output_filename = generate_output_filename(filename, ext)
         if ext.lower() in ["csv", ".csv"]:

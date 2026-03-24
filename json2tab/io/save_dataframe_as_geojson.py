@@ -27,36 +27,49 @@ def save_dataframe_as_geojson(
         data (pandas.DataFrame): DataFrame containing wind turbine data
         output_file (str):       Path for the output GeoJSON file
 
-
+    Raises:
+        Exception: when writing data is failed
     """
-    if gpd is None or Point is None:
-        logger.error("Missing python packages: 'geopandas' and/or 'shapely' not found")
-        print(
-            "Python package(s) 'geopandas' and/or 'shapely' not found, "
-            "please load this optional package to run LocationMerger."
-        )
-        print("Please run")
-        print("    poetry install --with locationmerger")
-        print("to install the necessary packages for LocationMerger")
+    logger.info("Writing data to GeoJSON file...")
 
+    if gpd is None:
+        logger.error("Missing python packages: 'geopandas' not found.")
+
+    if Point is None:
+        logger.error("Missing python packages: 'shapely.geometry' not found")
+
+    if gpd is None or Point is None:
+        logger.error(
+            "Please run '"
+            "poetry install --with geojson"
+            "' to install the necessary packages for exporting to geojson."
+        )
+
+        logger.warning("Skip writing data to GeoJSON file.")
         return
 
     try:
         logger.info("Converting data to GeoJSON format...")
 
-        # Create geometry column
-        geometry = [
-            Point(xy) for xy in get_lat_lon_matrix(data, return_in_lat_lon_order=False)
-        ]
-
-        # Convert to GeoDataFrame
-        gdf = gpd.GeoDataFrame(
-            data, geometry=geometry, crs="EPSG:4326"  # WGS84 coordinate system
-        )
+        if len(data) > 0:
+            # Create geometry column
+            geometry = [
+                Point(xy)
+                for xy in get_lat_lon_matrix(data, return_in_lat_lon_order=False)
+            ]
+        else:
+            geometry = []
 
         # Remove duplicate geometry column if it exists in the data
         if "geometry" in data.columns:
-            gdf = gdf.drop(columns=["geometry"])
+            data = data.drop(columns=["geometry"])
+
+        # Convert to GeoDataFrame
+        gdf = gpd.GeoDataFrame(
+            data,
+            geometry=gpd.GeoSeries(geometry),
+            crs="EPSG:4326",  # WGS84 coordinate system
+        )
 
         # Convert numeric columns to float where possible for better JSON compatibility
         numeric_columns = [
@@ -89,7 +102,7 @@ def save_dataframe_as_geojson(
 
     except Exception as e:
         logger.error(f"Error saving GeoJSON file: {e}")
-        logger.exception("Detailed error information:")
+        raise e
 
 
 def validate_geojson(filename: str) -> bool:
@@ -108,6 +121,6 @@ def validate_geojson(filename: str) -> bool:
         logger.info(f"GeoJSON validation successful: {len(data)} features loaded")
 
         return True
-    except Exception as e:
-        logger.exception(f"GeoJSON validation warning: {e}")
+    except IOError as e:
+        logger.error(f"GeoJSON validation (i.e. reloading) failed: {e}")
         return False

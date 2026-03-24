@@ -154,7 +154,7 @@ def austria(
                     is_offshore=False,
                 )
 
-                if lat is not None and lon is not None:
+                if turbine.is_valid():
                     turbines.append(turbine)
                 else:
                     logger.warning(
@@ -163,13 +163,14 @@ def austria(
                     )
                     skipped_turbines.append(turbine)
 
-        data = pd.DataFrame(turbines)
+        data = pd.DataFrame([t.to_dict() for t in turbines])
         save_dataframe(data, output_filename)
 
         logger.warning(f"Skipped {len(skipped_turbines)} turbines")
         if len(skipped_turbines) > 0 and logger.getEffectiveLevel() <= logging.DEBUG:
             save_dataframe(
-                pd.DataFrame(skipped_turbines), f"{output_filename}.skipped.csv"
+                pd.DataFrame([t.to_dict() for t in skipped_turbines]),
+                f"{output_filename}.skipped.csv",
             )
 
         return data

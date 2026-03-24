@@ -1,23 +1,22 @@
 """Module to get lat/lon coordinates for wind turbine location data convertion."""
 
+from typing import Tuple
+
 import numpy as np
 import pandas as pd
 
-try:
-    import geopandas as gpd
-except ImportError:
-    gpd = None
+from ..Turbine import Turbine
 
 try:
-    import shapely
+    from shapely import from_wkt
+    from shapely.geometry import Point
 except ImportError:
-    shapely = None
+    from ..TurbinePoint import TurbinePoint as Point
+    from ..TurbinePoint import from_wkt
 
-from ..logs import logger
 
-
-def get_lat_lon(turbine: dict):
-    """Get lat/lon coordinates for a turbine.
+def get_lat_lon(turbine: dict | Turbine | Point) -> Tuple[float, float]:
+    """Get lat/lon coordinates for a turbine or point.
 
     Args:
         turbine: dict containing wind turbine data
@@ -26,17 +25,37 @@ def get_lat_lon(turbine: dict):
         lat/lon coordinates of turbine
 
     """
-    lat_lon = get_lat_lon_matrix(turbine, return_in_lat_lon_order=True)
-    lat, lon = lat_lon[0, 0], lat_lon[0, 1]
+    out = get_lat_lon_matrix(turbine, return_in_lat_lon_order=True)
+    lat, lon = out[0, 0], out[0, 1]
     return lat, lon
 
 
-def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool = True):
+def get_lon_lat(turbine: dict | Turbine | Point) -> Tuple[float, float]:
+    """Get lon/lat coordinates for a turbine or point.
+
+    Args:
+        turbine: dict containing wind turbine data
+
+    Returns:
+        lon/lat coordinates of turbine
+
+    """
+    out = get_lat_lon_matrix(turbine, return_in_lat_lon_order=False)
+    lon, lat = out[0, 0], out[0, 1]
+    return lon, lat
+
+
+def get_lat_lon_matrix(
+    data: pd.DataFrame | dict | Turbine | Point,
+    return_in_lat_lon_order: bool = True,
+    compute_centroid: bool = False,
+):
     """Get matrix with two columns containing lat and lon for all turbines in data.
 
     Args:
         data: DataFrame containing wind turbine data
         return_in_lat_lon_order: Specify if output should be [lat, lon] or [lon, lat]
+        compute_centroid: Flag indicating if centroid should be computed for geometries
 
     Returns:
         matrix with two columns containing lat and lon for all turbines in data
@@ -52,31 +71,43 @@ def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool 
         def get_values(x):
             return x.to_numpy()
 
-    elif isinstance(data, dict):
+    elif isinstance(data, (Turbine, pd.Series)):
+        data = data.to_dict()
+
+    if isinstance(data, Point):
+        data = {"geometry": data}
+
+    if isinstance(data, dict):
         cols = data.keys()
 
     # Get latitude data
     latitude = None
     longitude = None
 
-    if "geometry" in cols:
-        if isinstance(data["geometry"], str) and shapely is not None:
-            geo_data = data
-            geo_data["geometry"] = shapely.from_wkt(data["geometry"])
-        elif (
-            isinstance(data["geometry"], pd.Series)
-            and isinstance(data["geometry"].iloc[0], str)
-            and gpd is not None
-        ):
-            geometry = gpd.GeoSeries.from_wkt(data["geometry"])
-            geo_data = gpd.GeoDataFrame(data, geometry=geometry)
-        else:
-            geo_data = data
+    if "geometry" in cols and data["geometry"] is not None:
+        geometry = data["geometry"]
 
         try:
-            longitude = geo_data["geometry"].x
-            latitude = geo_data["geometry"].y
-        except AttributeError:
+
+            def safe_from_wkt(x):
+                return from_wkt(x) if isinstance(x, str) else x
+
+            if isinstance(geometry, str):
+                geometry = safe_from_wkt(geometry)
+            elif isinstance(geometry, pd.Series):
+                geometry = geometry.apply(safe_from_wkt)
+
+            if compute_centroid:
+                geometry = (
+                    geometry.centroid
+                    if isinstance(geometry, Point)
+                    else geometry.apply(lambda x: x.centroid)
+                )
+
+            longitude = geometry.x
+            latitude = geometry.y
+
+        except (AttributeError, ValueError):
             longitude = None
             latitude = None
 
@@ -87,19 +118,12 @@ def get_lat_lon_matrix(data: pd.DataFrame | dict, return_in_lat_lon_order: bool 
                 latitude = get_values(data[field])
                 break
 
-    if latitude is None:
-        logger.error(f"Cannot find latitude-data in {cols}")
-
-    # Get longitude data
     if longitude is None:
         lon_fields = ["longitude", "lon", "Longitude", "E"]
         for field in lon_fields:
             if field in cols:
                 longitude = get_values(data[field])
                 break
-
-    if longitude is None:
-        logger.error(f"Cannot find longitude-data in {cols}")
 
     if return_in_lat_lon_order:
         return np.column_stack((latitude, longitude))

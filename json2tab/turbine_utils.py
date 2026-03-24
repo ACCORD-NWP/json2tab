@@ -4,6 +4,7 @@ import contextlib
 import math
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 
 from .location_converters.get_lat_lon_matrix import get_lat_lon
@@ -40,7 +41,10 @@ def standarize_dataframe(data: pd.DataFrame, always: bool = False) -> pd.DataFra
 
         turbines = []
         for _, row in data.iterrows():
-            turbines.append(datarow_to_turbine(row))
+            turbine = datarow_to_turbine(row)
+            if "geometry" in row:
+                turbine.geometry = row["geometry"]
+            turbines.append(turbine)
 
         data = pd.DataFrame(turbines)
     return data
@@ -68,7 +72,7 @@ def merge_turbine_data(
 
     id_field, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["id", "ID", "GSRN", "Turbine identifier (GSRN)", "Verk-ID"],
+            ["id", "ID", "GSRN", "Turbine identifier (GSRN)", "Verk-ID", "windfarm_id"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
@@ -210,6 +214,7 @@ def merge_turbine_data(
                 "farm id",
                 "name",
                 "Name",
+                "NAME",
                 "naam",
                 "Location",
                 "Projekteringsområde",
@@ -223,7 +228,7 @@ def merge_turbine_data(
     )
     n_turbines, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["n_turbines", "Number of turbines", "No. of wind turbines"],
+            ["n_turbines", "N_TURBINES", "Number of turbines", "No. of wind turbines"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
@@ -231,6 +236,9 @@ def merge_turbine_data(
         alternative_source,
         alternative_used,
     )
+
+    if n_turbines is not None and np.isnan(n_turbines):
+        n_turbines = None
 
     if n_turbines is not None and (not wind_farm):
         wind_farm = name
@@ -242,13 +250,20 @@ def merge_turbine_data(
             alternative_source,
             alternative_used,
         )
+
+        if not math.isinf(n_turbines) and n_turbines != int(n_turbines):
+            # nturbines doesn't seem to be the number of turbines,
+            # assume it is rated power
+            rated_power = n_turbines
+            n_turbines = 1
+
         if installed_power is not None:
             if n_turbines > 0:
                 rated_power = power_to_kw(installed_power / n_turbines)
             else:
                 logger.warning(
-                    f"Installed power is provided for windfarm '{wind_farm}' "
-                    f"but n_turbines={n_turbines}; "
+                    f"Installed power = {installed_power} is provided for "
+                    f"windfarm '{wind_farm}' but n_turbines={n_turbines}; "
                     "so the rated_power for this windfarm is ignored"
                 )
 
@@ -256,6 +271,8 @@ def merge_turbine_data(
         lambda source, default=None: get_value_from_dict(
             [
                 "start_date",
+                "start_year",
+                "START_YEAR",
                 "commission_date",
                 "commissioning",
                 "Date of commission",
@@ -275,6 +292,7 @@ def merge_turbine_data(
         lambda source, default=None: get_value_from_dict(
             [
                 "end_date",
+                "end_year",
                 "decommission_date",
                 "decommissioning",
                 "Date of decommissioning",
@@ -291,7 +309,7 @@ def merge_turbine_data(
     )
     country, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["country", "Country", "land"],
+            ["country", "Country", "land", "COUNTRY"],
             source if isinstance(source, dict) else source.to_dict(),
             default,
         ),
