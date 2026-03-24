@@ -36,6 +36,7 @@
   psutil = "^7.1.0"
   scikit-learn = "^1.7.0"
   scipy = "^1.8.0"
+  xlrd = "^2.0.1"
 
 [tool.poetry.group.geojson]
   optional = true
