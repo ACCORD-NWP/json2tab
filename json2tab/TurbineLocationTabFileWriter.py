@@ -255,6 +255,8 @@ class TurbineLocationTabFileWriter:
                     ]
 
                 with pd.option_context("future.no_silent_downcasting", True):
+                    if "n_turbines" not in filtered_table:
+                        filtered_table["n_turbines"] = 1
                     filtered_table = filtered_table.fillna(
                         {"n_turbines": 1}
                     ).infer_objects(copy=False)

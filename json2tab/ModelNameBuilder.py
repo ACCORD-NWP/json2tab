@@ -5,6 +5,10 @@ import re
 
 def build_model_designation(manufacturer: str, diameter: float, power: float) -> str:
     """Build model designation from manufacturer, diameter and power."""
+
+    if manufacturer is None:
+        manufacturer = ""
+        
     if manufacturer.title() == "Vestas":
         if power < 1000:
             return f"{manufacturer} V{diameter:.0f}-{power:.0f}"

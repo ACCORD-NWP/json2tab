@@ -83,6 +83,8 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>Nordex|Sudwind|Suedwind|Südwind) (N|S)(\s|-)?(?P<diameter>\d+)((/(?P<power>\d+(\.(\d+|X|x))?))(-\d(\.\d+)?)?)?",
         # Tacke (eg Tacke TW 1.5i)
         r"(?P<manufacturer>Tacke)\s+(TW|WR|TZ)\s?(?P<power>\d+(\.\d+))[a-z]+",
+        # iea (eg iea 15MW)
+        r"(?P<manufacturer>iea) (?P<powerMW>(\d+(\.\d+)?))(MW)?",
         # BARD pattern (eg BARD  6.5, BARD  VM)
         r"(?P<manufacturer>BARD) (?P<power>(\d+(\.\d+)?)|V)M?",
         # Seawind (eg Seawind  18 - 260)
