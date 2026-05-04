@@ -35,3 +35,8 @@ class CountryHandler:
             return country in self.selected_countries
 
         return True
+
+    def display_name(self):
+        """Gets a display name for readable subsetting filtering."""
+        method = "countr" + ("y" if len(self.selected_countries) == 1 else "ies")
+        return f"{method}: {', '.join(self.selected_countries)}"

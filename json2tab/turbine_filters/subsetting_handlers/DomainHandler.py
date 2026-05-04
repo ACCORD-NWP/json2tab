@@ -95,6 +95,10 @@ class DomainHandler:
         # Check if point is inside rectangle in projected space
         return (xmin <= x <= xmax) and (ymin <= y <= ymax)
 
+    def display_name(self):
+        """Gets a display name for readable subsetting filtering."""
+        return f"domain: {self.config.get('name', 'unnamed_domain')}"
+
     def get_domain_points(self, resolution: int = 100) -> tuple:
         """Get points defining domain boundary in lat/lon.
 

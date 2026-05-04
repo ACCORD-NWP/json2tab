@@ -11,6 +11,13 @@ from .logs import logger
 from .turbine_utils import standarize_dataframe
 from .utils import unify_file_list
 
+try:
+    from .location_converters.country_offshore_flag_fixer import (
+        country_offshore_flag_fixer,
+    )
+except ImportError:
+    country_offshore_flag_fixer = None
+
 
 class TurbineLocationManager:
     """Main class for reading and processing wind turbine location data from file(s)."""
@@ -44,7 +51,7 @@ class TurbineLocationManager:
         """
         location_files = unify_file_list(location_data_file)
 
-        logger.debug(
+        logger.info(
             "Loading windturbine location data from the following "
             f"file{'(s)' if len(location_files) > 1 else ''}: "
             f"{' '.join(str(p) for p in location_files)}"
@@ -94,6 +101,27 @@ class TurbineLocationManager:
 
         # Set all nan's to None in specs table
         self.turbines = self.turbines.replace({np.nan: None})
+
+    def fix_country_offshore(
+        self,
+        eez_file: str,
+        land_file: str,
+        update_country: bool = True,
+        update_is_offshore: bool = True,
+        fix_missing: bool = True,
+    ):
+        """Fixes country and is_offshore flag for all loaded turbines."""
+        if country_offshore_flag_fixer is not None and (
+            self.turbines["country"].isna().any() or not fix_missing
+        ):
+            self.turbines = country_offshore_flag_fixer(
+                input=self.turbines,
+                eez_file=eez_file,
+                land_file=land_file,
+                update_country=update_country,
+                update_is_offshore=update_is_offshore,
+                filter_countries=[None] if fix_missing else None,
+            )
 
     def filter_turbines(self, filterer):
         """Appy a turbine filter to to managed turbines.

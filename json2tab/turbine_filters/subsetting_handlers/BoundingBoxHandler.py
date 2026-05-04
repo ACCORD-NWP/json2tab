@@ -40,3 +40,7 @@ class BoundingBoxHandler:
         del country
 
         return self.min_lon <= lon <= self.max_lon and self.min_lat <= lat <= self.max_lat
+
+    def display_name(self):
+        """Gets a display name for readable subsetting filtering."""
+        return f"bbox: [{self.min_lon}, {self.min_lat}, {self.max_lon}, {self.max_lat}]"

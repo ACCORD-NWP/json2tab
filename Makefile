@@ -57,6 +57,9 @@ DEBUG_LEVEL=3
 MIN_TURBINE_DIST:=0.00025#~25m
 # OSM: download todays data yes|no
 OSM_DOWNLOAD:=true
+OVERPASS_API_URL:=https://overpass-api.de/api/interpreter
+#OVERPASS_API_URL:=https://overpass.private.coffee/api/interpreter
+#OVERPASS_API_URL:=https://localhost/api/interpreter
 # Austria: Download data from IGwindkraft directly from website
 IG_WINDKRAFT_DOWNLOAD:=false
 
@@ -84,7 +87,7 @@ euromap:
 
 ifeq ($(OSM_DOWNLOAD), true)
 	@echo "=== >>> DOWNLOADING NEW OSM DATA <<< ==="
-	json2tab --debug=$(DEBUG_LEVEL) --fetch-osm-data "$(OUTPUT_FOLDER)/$(OSM_TODAY_FILE)"
+	json2tab --debug=$(DEBUG_LEVEL) --fetch-osm-data "$(OUTPUT_FOLDER)/$(OSM_TODAY_FILE)" --overpass-url $(OVERPASS_API_URL)
 	cp $(OUTPUT_FOLDER)/$(OSM_BASENAME)_$(TODAY_STAMP)* static_data/
 else
 	@echo "=== >>> CREATING NEW OSM FILE BASED ON REQUEST static_data/$(OSM_REQ_OUTPUT_FILE) <<< ==="

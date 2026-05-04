@@ -167,6 +167,15 @@ def main(argv=None):
             default=None,
         )
 
+        parser.add_argument(
+            "--overpass-url",
+            "-url",
+            metavar="url",
+            type=str,
+            help="Url for Overpass API calls",
+            default=None,
+        )
+
     if location_merger is not None:
         parser.add_argument(
             "--merge",
@@ -319,8 +328,14 @@ def main(argv=None):
         knmi_turbine_database_writer(args.inverse, database_file)
     elif hasattr(args, "fetch_osm_data") and args.fetch_osm_data:
         if osm_data_fetcher is not None:
+            overpass_url = args.overpass_url if hasattr(args, "overpass_url") else None
             output_filename = args.fetch_osm_data
-            osm_data_fetcher(output_filename, query_windturbine=True, query_windfarm=True)
+            osm_data_fetcher(
+                output_filename,
+                query_windturbine=True,
+                query_windfarm=True,
+                overpass_url=overpass_url,
+            )
         else:
             logger.warning(
                 "Loading osm data fetcher failed; please install optional packages."
@@ -390,6 +405,7 @@ def main(argv=None):
                 rename_rules=args.rename_columns,
                 write_columns=args.write_columns,
                 min_distance=args.min_distance,
+                overpass_url=args.overpass_url,
             )
         else:
             logger.warning("Loading converter failed; please install optional packages.")

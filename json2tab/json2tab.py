@@ -129,6 +129,20 @@ def main(config: Dict[str, Any]):
     turbine_location_files = config["input"]["turbine_locations"]
     location_manager = TurbineLocationManager(turbine_location_files)
 
+    # Fix country/is_offshore for missing tubines
+    try:
+        eez_file = config["subsetting"]["country"]["files"]["eez"]
+    except KeyError:
+        eez_file = None
+
+    try:
+        land_file = config["subsetting"]["country"]["files"]["country"]
+    except KeyError:
+        land_file = None
+
+    if eez_file and land_file:
+        location_manager.fix_country_offshore(eez_file, land_file)
+
     # Apply cropping to subdomain
     location_manager.filter_turbines(TurbineGeoFilterer(config["subsetting"]))
 

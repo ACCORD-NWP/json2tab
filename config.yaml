@@ -99,7 +99,7 @@ output:
     type_spec:
       float_precision: 4
       include_headers: true
-      windspeed_range: "cut-in:0.5:cut-out" # (Optional) range for subset selection of windspeeds in format start:[step:]stop to write to output, start \in [cut-in, Integers], stop \in [cut-out, Integers]
+      windspeed_range: "cut-in:0.5:cut-out#>100" # (Optional) range for subset selection of windspeeds in format start:[step:]stop[#>len] to write to output, start \in [cut-in, Integers], stop \in [cut-out, Integers]
       extend_to_35ms: false # (Optional) flag to extend all windspeed tables to 35 m/s
       bypass_cutout: false # (Optional) flag to bypass cut-out windspeed in output table (i.e. it will generate cp and powers for windspeeds > cut-out-speed)
 

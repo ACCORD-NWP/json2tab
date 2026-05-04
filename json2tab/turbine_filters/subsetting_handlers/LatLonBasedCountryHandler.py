@@ -55,3 +55,8 @@ class LatLonBasedCountryHandler:
         del country
         country = self.l2c.get_country(lon, lat)
         return country in self.selected_countries
+
+    def display_name(self):
+        """Gets a display name for readable subsetting filtering."""
+        method = "countr" + ("y" if len(self.selected_countries) == 1 else "ies")
+        return f"{method}: {', '.join(self.selected_countries)}"

@@ -75,7 +75,7 @@ def fix_country_offshore(
 
 
 def country_offshore_flag_fixer(
-    input_filename: List[str] | str | pd.DataFrame,
+    filename_or_data: List[str] | str | pd.DataFrame,
     eez_file: str,
     land_file: Optional[str] = None,
     prov_file: Optional[str] = None,
@@ -86,20 +86,20 @@ def country_offshore_flag_fixer(
 ) -> pd.DataFrame:
     """Fixer to derive country and is_offshore field for turbine locations."""
     if update_country and update_is_offshore:
-        prog_name = "Country and is_offshore field fixer"
+        prog_name = "country and is_offshore field fixer"
     elif update_country:
-        prog_name = "Country field fixer"
+        prog_name = "country field fixer"
     elif update_is_offshore:
-        prog_name = "Is-offshore field fixer"
+        prog_name = "is-offshore field fixer"
     else:
         logger.warning("Nothing to fix as both update country and is_offshore are False")
 
-    print(f"{prog_name}")
-    print(f" > Country EEZ-file: {eez_file}")
+    logger.info(f"Run {prog_name}")
+    logger.info(f"Country EEZ-file: {eez_file}")
     if land_file is not None:
-        print(f" > Country land border-file: {land_file}")
+        logger.info(f"Country land border-file: {land_file}")
     if prov_file is not None:
-        print(f" > Country provincie border-file: {prov_file}")
+        logger.info(f"Country provincie border-file: {prov_file}")
 
     loc2eez = Location2CountryConverter(eez_file)
     loc2land = Location2CountryConverter(land_file) if land_file is not None else None
@@ -108,38 +108,41 @@ def country_offshore_flag_fixer(
     )
 
     data = None
-    if isinstance(input_filename, str):
-        input_filenames = [input_filename]
-    if isinstance(input_filename, list):
-        input_filenames = input_filename
-    elif isinstance(input_filename, pd.DataFrame):
-        data = input_filename
+    if isinstance(filename_or_data, str):
+        input_filenames = [filename_or_data]
+    if isinstance(filename_or_data, list):
+        input_filenames = filename_or_data
+    elif isinstance(filename_or_data, pd.DataFrame):
+        data = filename_or_data
         input_filenames = [None]
     else:
         logger.error(
-            f"Cannot interpret input = {input_filename} as a filename or pandas.DataFrame"
+            f"Cannot interpret input = {filename_or_data} "
+            f"(type = {type(filename_or_data)}) "
+            "as filename(s) or pandas.DataFrame"
         )
 
     for input_filename in input_filenames:
-        if input_filename is not None:
-            if output_filename is None or len(input_filenames) > 1:
-                input_filename_base, input_filename_ext = os.path.splitext(input_filename)
-                backup_input_filename = f"{input_filename_base}{input_filename_ext}.orig"
+        backup_input_filename = None
+        if input_filename is not None and (
+            output_filename is None or len(input_filenames) > 1
+        ):
+            input_filename_base, input_filename_ext = os.path.splitext(input_filename)
+            backup_input_filename = f"{input_filename_base}{input_filename_ext}.orig"
 
-                shutil.copyfile(input_filename, backup_input_filename)
-                logger.info(
-                    f"Copied original input-file {input_filename} to "
-                    f"{backup_input_filename}, set output-file to {input_filename}"
-                )
-                output_filename = input_filename
-            else:
-                backup_input_filename = None
+            shutil.copyfile(input_filename, backup_input_filename)
+            logger.info(
+                f"Copied original input-file {input_filename} to "
+                f"{backup_input_filename}, set output-file to {input_filename}"
+            )
+            output_filename = input_filename
         # else: data is already set by direct feed-in
 
-        print(f"{prog_name} converts {input_filename} -> {output_filename}")
-
-        logger.debug(f"input filename: {backup_input_filename or input_filename}")
-        logger.debug(f"output filename: {output_filename}")
+        logger.info(
+            f"{prog_name} converts "
+            f"{backup_input_filename or input_filename or 'DataFrame'}"
+            f" -> {output_filename or 'DataFrame'}"
+        )
 
         if input_filename is not None:
             data = read_locationdata_as_dataframe(input_filename)
@@ -147,38 +150,42 @@ def country_offshore_flag_fixer(
         mask = None
         if filter_countries is not None:
             for country in filter_countries:
-                this_mask = data["country"] == country
-                mask = mask | this_mask if mask is not None else this_mask
+                if country is not None:
+                    this_mask = data["country"] == country
+                else:
+                    this_mask = data["country"].isna()
+                mask = (mask | this_mask) if mask is not None else this_mask
 
         if data is not None:
             masked_data = data[mask] if mask is not None else data
-            new_is_offshore, new_country, new_land = zip(
-                *masked_data.apply(
-                    lambda row: get_offshore_and_country(
-                        loc2eez,
-                        loc2land or loc2prov,
-                        lon=row["longitude"],
-                        lat=row["latitude"],
-                    ),
-                    axis=1,
+            if len(masked_data) > 0:
+                new_is_offshore, new_country, new_land = zip(
+                    *masked_data.apply(
+                        lambda row: get_offshore_and_country(
+                            loc2eez,
+                            loc2land or loc2prov,
+                            lon=row["longitude"],
+                            lat=row["latitude"],
+                        ),
+                        axis=1,
+                    )
                 )
-            )
 
-            for update_field, field, new_data in [
-                (
-                    update_country,
-                    "country",
-                    new_country if loc2land is not None else new_land,
-                ),
-                (update_is_offshore, "is_offshore", new_is_offshore),
-            ]:
-                if update_field:
-                    if mask is not None:
-                        data.loc[mask, field] = new_data
-                    else:
-                        data[field] = new_data
+                for update_field, field, new_data in [
+                    (
+                        update_country,
+                        "country",
+                        new_country if loc2land is not None else new_land,
+                    ),
+                    (update_is_offshore, "is_offshore", new_is_offshore),
+                ]:
+                    if update_field:
+                        if mask is not None:
+                            data.loc[mask, field] = new_data
+                        else:
+                            data[field] = new_data
 
-                    logger.debug(f"Updated {field} for {len(new_data)} items.")
+                        logger.debug(f"Updated {field} for {len(new_data)} items.")
 
             if output_filename is not None:
                 save_dataframe(data, output_filename)
@@ -191,7 +198,7 @@ def get_offshore_and_country(
     location_to_land: Location2CountryConverter,
     lon: float,
     lat: float,
-) -> Tuple[bool, float]:
+) -> Tuple[bool, str, str]:
     """Computes country and is_offshore for a given lat/lon.
 
     Args:
@@ -214,4 +221,7 @@ def get_offshore_and_country(
         land = None
         is_offshore = None
 
-    return is_offshore, country, land or country
+    if land is None:
+        land = country
+
+    return is_offshore, country, land

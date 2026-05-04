@@ -26,3 +26,7 @@ class TrueHandler:
         """
         del lon, lat, country
         return True
+
+    def display_name(self):
+        """Gets a display name for readable subsetting filtering."""
+        return "always True"

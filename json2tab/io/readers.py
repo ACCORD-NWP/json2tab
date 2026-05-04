@@ -123,7 +123,7 @@ def read_locationdata_from_tab_as_dataframe(input_filename: str) -> pd.DataFrame
         knmi_cols = ["lon", "lat", "type", "r", "z"]
         if len(data.columns) == len(knmi_cols):
             data.columns = knmi_cols
-            data["type"] = f"KN_{int(data['type'])}"
+            data["type"] = [f"KN_{kn_id:03n}" for kn_id in data["type"].astype(int)]
 
         if "source" not in data.columns:
             _, data["source"] = os.path.split(input_filename)
@@ -248,7 +248,7 @@ def read_locationdata_from_geojson_as_dataframe(input_filename: str) -> pd.DataF
                 if geometry is not None and shape is not None:
                     geometry = shape(geometry)
 
-                if "geometry" not in props or props["geometry"] is None:
+                if props.get("geometry") is None:
                     props["geometry"] = geometry
 
                 turbines.append(props)

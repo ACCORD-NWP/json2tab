@@ -31,8 +31,9 @@ from ..utils import power_to_kw, print_processing_status
 def osm_data_fetcher(
     output_filename: str,
     input_filename: Optional[str] = None,
-    query_windturbine: bool = True,
-    query_windfarm: bool = True,
+    query_windturbine: Optional[bool] = True,
+    query_windfarm: Optional[bool] = True,
+    overpass_url: Optional[str] = None,
 ) -> pd.DataFrame:
     """OpenStreetMap wind turbine location data fetcher.
 
@@ -42,6 +43,9 @@ def osm_data_fetcher(
                                OverpassAPI call (i.e. use local/cached OSM data)
         query_windturbine (bool): Query wind_turbine data from OSM (default: True)
         query_windfarm (bool):    Query wind_farm data from OSM (default: True)
+        overpass_url (str):    Url used for the overpass API call, some public
+                               Overpass API instances can be found on
+                               https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances
 
     Returns:
         pandas.DataFrame with windturbine location data
@@ -49,6 +53,9 @@ def osm_data_fetcher(
     print(
         f"OSM (windturbine location) Data Fetcher ({input_filename} -> {output_filename})"
     )
+
+    if not overpass_url:
+        overpass_url = "https://overpass-api.de/api/interpreter"
 
     logger.debug(f"input filename: {input_filename}")
     logger.debug(f"output filename: {output_filename}")
@@ -84,8 +91,6 @@ def osm_data_fetcher(
                 data = json.load(input_file)
 
         if not data:
-            # Overpass API URL
-            overpass_url = "http://overpass-api.de/api/interpreter"
             logger.debug(f"Using overpass API url: '{overpass_url}'")
 
             # Overpass QL query for wind turbines and windfarms
@@ -99,7 +104,14 @@ def osm_data_fetcher(
             if requests is not None:
                 start_time = time.time()
                 response = requests.get(overpass_url, params={"data": overpass_query})
-                logger.info(f"Got response after {time.time() - start_time} seconds.")
+                logger.info(
+                    f"Got response after {time.time() - start_time} seconds: "
+                    f"Status {response.status_code} ({response.reason})."
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"An error occured fetching data: \n\n{response.text}\n")
+
                 data = response.json()
                 duration = time.time() - start_time
                 logger.info(f"Got json data after {duration} seconds.")
@@ -205,13 +217,20 @@ def osm_data_fetcher(
 
                         # Append relation info
                         site = f"{site} [{get_osm_id(windfarm)}]"
-                        manufacturer = manufacturer or windfarm["tags"].get(
-                            "manufacturer"
-                        )
-                        model_type = model_type or get_model_type_from_element(windfarm)
-                        hub_height = hub_height or get_hub_height_from_element(windfarm)
-                        rated_power = rated_power or element.get("rated_power_via_wf")
-                        start_date = start_date or windfarm["tags"].get("start_date")
+                        if manufacturer is None:
+                            manufacturer = windfarm["tags"].get("manufacturer")
+
+                        if model_type is None:
+                            model_type = get_model_type_from_element(windfarm)
+
+                        if hub_height is None:
+                            hub_height = get_hub_height_from_element(windfarm)
+
+                        if rated_power is None:
+                            rated_power = element.get("rated_power_via_wf")
+
+                        if start_date is None:
+                            start_date = windfarm["tags"].get("start_date")
 
                 turbine = Turbine(
                     turbine_id=osm_id,

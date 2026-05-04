@@ -138,14 +138,12 @@ class TurbineMatcher:
 
             if rated_power is None and len(power_dict) == 1:
                 rated_power = next(iter(power_dict.keys()))
-                logger.debug(f"Sloppy cache fetch; set rated_power to {rated_power}")
 
             if rated_power is not None:
                 if not isinstance(rated_power, int):
                     rated_power = int(rated_power)
 
                 if rated_power in power_dict:
-                    logger.debug(f"Fetched: {turbine_type} (rated_power={rated_power})")
                     return power_dict[rated_power]
 
         return None
@@ -277,7 +275,10 @@ class TurbineMatcher:
         counter_per_country = {}
 
         total_turbines = len(turbines.index)
-        logger.info(f"Start matching types to {total_turbines} turbine locations")
+        logger.info(
+            "Start matching model designlations "
+            f"to {total_turbines} turbine locations."
+        )
 
         # Map all unique turbine types to known model designations.
         turbine_counter = 0
@@ -295,6 +296,9 @@ class TurbineMatcher:
                     matched_line_index,
                     used_matcher,
                 ) = self.match_model_designation_on_turbine(turbine)
+
+                if matched_line_index is None:
+                    matched_line_index = no_match_idx
 
                 type_props = self.turbine_type_manager.get_specs_by_line_index(
                     matched_line_index
@@ -318,9 +322,8 @@ class TurbineMatcher:
                 turbines.loc[idx, "power_rating"] = rated_power
                 turbines.loc[idx, "hub_height"] = height
                 turbines.loc[idx, self.model_designation_key] = model_designation
-                turbines.loc[idx, self.matched_line_index_key] = (
-                    matched_line_index or no_match_idx
-                )
+                turbines.loc[idx, self.matched_line_index_key] = matched_line_index
+
                 if self.used_matcher_key is not None:
                     turbines.loc[idx, self.used_matcher_key] = used_matcher
 
@@ -499,7 +502,7 @@ class TurbineMatcher:
 
         props = (
             f"manufacturer='{manufacturer}', turbine_type='{turbine_type}', "
-            f"extended_type='{extended_type}'; "
+            f"extended_type='{extended_type}' "
             f"(diameter={diameter}, height={height}, power={power})"
         )
 
@@ -536,7 +539,8 @@ class TurbineMatcher:
                 if _type is not None:
                     source_postfix = f" from '{_source}'" if _type != _source else ""
                     logger.debug(
-                        f"Processing turbine_type='{_type}'{source_postfix} ({label})"
+                        "Try to derive model designation from "
+                        f"turbine_type='{_type}'{source_postfix} by {label}."
                     )
                     (
                         model_designation,

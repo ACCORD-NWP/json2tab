@@ -56,7 +56,15 @@ def germany(
             manufacturer = manufacturer.replace("GmbH", "")
             manufacturer = manufacturer.strip()
 
+        power_rating = row.get("Nettonennleistung")
+        if power_rating is None:
+            power_rating = row.get("Bruttoleistung")
+
         diameter = row.get("Rotordurchmesser")
+
+        start_date = row.get("InbetriebnahmedatumAmAktuellenStandort")
+        if start_date is None:
+            start_date = (row.get("Inbetriebnahmedatum"),)
 
         turbine = Turbine(
             id=row.get("EinheitMastrNummer"),
@@ -65,14 +73,13 @@ def germany(
             latitude=row.get("Breitengrad"),
             longitude=row.get("Laengengrad"),
             hub_height=row.get("Nabenhoehe"),
-            power_rating=row.get("Nettonennleistung") or row.get("Bruttoleistung"),
+            power_rating=power_rating,
             diameter=diameter,
             radius=diameter / 2,
             manufacturer=manufacturer,
             type=row.get("Typenbezeichnung"),
             wind_farm=row.get("NameWindpark"),
-            start_date=row.get("InbetriebnahmedatumAmAktuellenStandort")
-            or row.get("Inbetriebnahmedatum"),
+            start_date=start_date,
             end_date=row.get("DatumEndgueltigeStilllegung"),
             source=label_source,
             is_offshore=get_value_from_catalog(katalog, row.get("WindAnLandOderAufSee"))

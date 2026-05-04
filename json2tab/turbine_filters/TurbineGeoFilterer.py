@@ -51,13 +51,11 @@ class TurbineGeoFilterer:
         Returns:
             pandas.DataFrame with filtered turbine locations
         """
-        logger.debug(f"Start filtering from {len(data.index)} turbine locations")
-
         data = data[data.apply(lambda turbine: self._location_check(turbine), axis=1)]
 
         logger.info(
-            f"Filtered turbine locations, "
-            f"selected {len(data.index)} turbines in {self.config['method']}"
+            f"Filtered turbine locations, selected {len(data.index)} turbines "
+            f"in {self.subsetting_handler.display_name()}."
         )
 
         return data

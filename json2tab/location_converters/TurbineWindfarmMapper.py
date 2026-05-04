@@ -191,9 +191,10 @@ class TurbineWindfarmMapper:
             idx = wf_turbine[self.key_wt_idx]
             orig_turbine = df_turbines.iloc[idx]
 
-            map_source_label = (
-                source_label or f"{wf_turbine['source']}+{orig_turbine['source']}"
-            )
+            map_source_label = source_label
+            if map_source_label is None:
+                map_source_label = f"{wf_turbine['source']}+{orig_turbine['source']}"
+
             merged_turbine = merge_turbine_data(
                 wf_turbine, orig_turbine, map_source_label
             )
@@ -327,7 +328,9 @@ class TurbineWindfarmMapper:
 
             for _, windfarm in sub_windfarms.iterrows():
                 idx = windfarm[self.key_wf_idx]
-                count = windfarm[self.key_n_wt] or 0
+                count = windfarm.get(self.key_n_wt)
+                if count is None:
+                    count = 0
 
                 if not isinstance(count, int):
                     count = int(count)
@@ -345,7 +348,10 @@ class TurbineWindfarmMapper:
                 len_mapped = min(len(mapped.index), count)
                 df_windfarms.loc[idx, self.key_mapped] = len_mapped
 
-                wf_name = windfarm.get("name") or windfarm.get("id", "Unknown")
+                wf_name = windfarm.get("name")
+                if wf_name is None:
+                    wf_name = windfarm.get("id", "Unknown")
+
                 logger.debug(
                     f"Windfarm '{wf_name}' should have {count} wind turbines "
                     f"({len_mapped} turbines mapped)"

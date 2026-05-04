@@ -86,6 +86,7 @@ def converter(
     rename_rules: Optional[str | dict] = None,
     write_columns: Optional[str | dict] = None,
     min_distance: Optional[float] = None,
+    overpass_url: Optional[str] = None,
 ):
     """Entry point for different converters.
 
@@ -99,6 +100,7 @@ def converter(
         rename_rules (str | dict):         Rename rules to rename columns in input
         write_columns (str | dict):        Inject rules to write columns in output
         min_distance (float):              Min distance for remove_short_distance
+        overpass_url (str):                Url used for the overpass API call
     """
     # Process first multi-input file converters
     if convert_type in ["fix_country_offshore", "fix_country_is_offshore"]:
@@ -141,13 +143,14 @@ def converter(
             windfarm_file, windturbine_file = windturbine_file, windfarm_file
         greece(windfarm_file, windturbine_file, output_filename)
     elif convert_type == "osm":
-        osm_data_fetcher(output_filename, input_filenames[0])
+        osm_data_fetcher(output_filename, input_filenames[0], overpass_url=overpass_url)
     elif convert_type == "osm_windturbine":
         osm_data_fetcher(
             output_filename,
             input_filenames[0],
             query_windturbine=True,
             query_windfarm=False,
+            overpass_url=overpass_url,
         )
     elif convert_type == "osm_windfarm":
         osm_data_fetcher(
@@ -155,6 +158,7 @@ def converter(
             input_filenames[0],
             query_windturbine=False,
             query_windfarm=True,
+            overpass_url=overpass_url,
         )
     elif convert_type == "osm_windturbine_windfarm":
         osm_data_fetcher(
@@ -162,6 +166,7 @@ def converter(
             input_filenames[0],
             query_windturbine=True,
             query_windfarm=True,
+            overpass_url=overpass_url,
         )
 
     else:

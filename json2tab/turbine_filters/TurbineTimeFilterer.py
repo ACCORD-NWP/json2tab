@@ -35,8 +35,6 @@ class TurbineTimeFilterer:
         Returns:
             pandas.DataFrame with filtered turbine locations
         """
-        logger.debug(f"Start filtering from {len(data.index)} turbine locations")
-
         data = data[data.apply(lambda turbine: self._timeframe_check(turbine), axis=1)]
 
         logger.info(

@@ -1,6 +1,7 @@
 """Module that handles generation of tab files for wind turbine data."""
 
 import contextlib
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -82,10 +83,12 @@ class TurbineLocationTabFileWriter:
             "#     Subdomain selection method:      "
             f"{selection_method}({selection_method_details}) \n"
         )
-        file.write(
-            "#     Situation date:                  "
-            f"{subsetting_config.get('situation_date')} \n"
-        )
+
+        simulation_date = subsetting_config.get("situation_date")
+        if simulation_date == "today":
+            simulation_date = f"{simulation_date} = {date.today()}"
+
+        file.write("#     Situation date:                  " f"{simulation_date} \n")
 
         file.write("#\n")
         file.write(
@@ -142,7 +145,10 @@ class TurbineLocationTabFileWriter:
                     radius = get_radius(turbine)
                     height = get_height(turbine)
 
-                    multiplicity = int(turbine.get("n_turbines", None) or 1)
+                    multiplicity = turbine.get("n_turbines", None)
+                    if multiplicity is None:
+                        multiplicity = 1
+                    multiplicity = int(multiplicity)
 
                     # Fetch optional information
                     country = turbine.get("country")
@@ -226,6 +232,15 @@ class TurbineLocationTabFileWriter:
     def write_installed_capacity_table(self, matched_turbines: pd.DataFrame):
         """Write table with installed capacity for each country."""
         output_dir = Path(self.config["output"]["directory"])
+
+        if "country" not in matched_turbines:
+            matched_turbines["country"] = "Unknown"
+
+        if "is_offshore" not in matched_turbines:
+            matched_turbines["is_offshore"] = None
+
+        if "n_turbines" not in matched_turbines:
+            matched_turbines["n_turbines"] = 1
 
         if len(matched_turbines) > 0:
             countries = matched_turbines["country"].unique().tolist()

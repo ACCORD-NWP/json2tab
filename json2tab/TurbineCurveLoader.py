@@ -160,8 +160,8 @@ def get_cp_ct_power_curves(
         model_designation_deriver: (Optional) Deriver to find closest match for
                                      wind turbines without cp/ct data
         windspeed_subset: (Optional) List of windspeeds to return for subset,
-                                     string of format start:[step:]stop for range of
-                                     windspeeds or None (no subset taken of data)
+                                     string of format start:[step:]stop[#>len] for range
+                                     of windspeeds or None (no subset taken of data)
         extend_to_35ms:   (Optional) extend output ct/cp data to 35m/s range
         bypass_cutout:    (Optional) Use 10% decay in cp in stead of zero cp/power
                                      for extending cp/power curve to 35m/s
@@ -278,26 +278,33 @@ def get_cp_ct_power_curves(
     ws_range_step = None
 
     if isinstance(windspeed_subset, str):
-        ws_range = windspeed_subset.split(":")
-        if len(ws_range) in [2, 3]:
-            if ws_range[0].lower() in ["cut-in", "cutin", "cut_in"]:
-                ws_range_start = cut_in
-            elif ws_range[0].isdigit():
-                ws_range_start = float(ws_range[0])
+        ws_min_length = 0
+        ws_limit = windspeed_subset.split("#>")
+        windspeed_subset = ws_limit[0]
+        if len(ws_limit) == 2:
+            ws_min_length = int(ws_limit[1])
 
-            try:
-                if len(ws_range) == 3:
-                    ws_range_step = float(ws_range[1])
-            except ValueError:
-                pass
+        if len(ws_values) > ws_min_length:
+            ws_range = windspeed_subset.split(":")
+            if len(ws_range) in [2, 3]:
+                if ws_range[0].lower() in ["cut-in", "cutin", "cut_in"]:
+                    ws_range_start = cut_in
+                elif ws_range[0].isdigit():
+                    ws_range_start = float(ws_range[0])
 
-            if ws_range[-1].lower() in ["cut-out", "cutout", "cut_out"]:
-                ws_range_stop = cut_out
-            elif ws_range[-1].isdigit():
-                ws_range_stop = float(ws_range[-1])
+                try:
+                    if len(ws_range) == 3:
+                        ws_range_step = float(ws_range[1])
+                except ValueError:
+                    pass
 
-    if ws_range_start and ws_range_stop:
-        if not ws_range_step:
+                if ws_range[-1].lower() in ["cut-out", "cutout", "cut_out"]:
+                    ws_range_stop = cut_out
+                elif ws_range[-1].isdigit():
+                    ws_range_stop = float(ws_range[-1])
+
+    if ws_range_start is not None and ws_range_stop is not None:
+        if ws_range_step is None:
             ws_range_step = 1
 
         logger.debug(

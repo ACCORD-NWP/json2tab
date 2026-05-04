@@ -395,7 +395,11 @@ def get_rated_power_kw(
             unit = "KW"
 
     if unit is not None or guess_unit:
-        return power_to_kw(rated_power, known_unit=unit, diameter=diameter) or default
+        rated_power_kw = power_to_kw(rated_power, known_unit=unit, diameter=diameter)
+        if rated_power_kw is not None:
+            return rated_power_kw
+
+        return default
 
     return rated_power
 
@@ -440,7 +444,10 @@ def get_installed_power(specs: Dict[str, Any] | List[Dict], default: float = 0) 
             power_fields, specs, default, require_positive=True
         )
 
-    return installed_power or default
+    if installed_power is not None:
+        return installed_power
+
+    return default
 
 
 def power_to_kw(

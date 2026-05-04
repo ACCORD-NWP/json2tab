@@ -94,7 +94,7 @@ class ModelDesignationDeriver:
                         else "wind_speeds"
                     )
 
-                logger.debug(f"Search for {field} = {turbine_type}, sort: {sort_field}")
+                # logger.debug(f"Search for {field} = {turbine_type}, sort: {sort_field}")
 
                 # Get model_designation from specs df
                 specs = specs_df[
@@ -110,14 +110,16 @@ class ModelDesignationDeriver:
                     ]
 
                 if len(specs) > 0:
-                    logger.debug(f"Found {len(specs)} specs with {field}={turbine_type}")
-
                     # Remove results with empty model_designation
-                    specs_filtered = specs[specs["model_designation"] != ""]
+                    specs_filtered = specs[
+                        (specs["model_designation"] != "")
+                        & ~(specs["model_designation"].isna())
+                    ]
                     if len(specs_filtered) > 0:
                         specs = specs_filtered
-                        logger.debug(
-                            f"Found {len(specs)} specs with {field}={turbine_type} "
+                        msg = (
+                            f"Found {len(specs)} type specifications "
+                            f"with {field}={turbine_type} "
                             "and a given model_designation."
                         )
 
@@ -126,18 +128,16 @@ class ModelDesignationDeriver:
                             specs_filtered = specs[specs["is_manufacturer_data"] == True]
                             if len(specs_filtered) > 0:
                                 specs = specs_filtered
-                                logger.debug(
-                                    f"Found {len(specs)} specs with "
-                                    f"{field}={turbine_type}, a given "
+                                msg = (
+                                    f"Found {len(specs)} type specifications "
+                                    f"with {field}={turbine_type}, a given "
                                     "model_designation, and manufacturer provided data."
                                 )
 
-                        if len(specs) > 1:
-                            logger.debug(
-                                f"Sort {len(specs)} specs with "
-                                f"{field}={turbine_type} on {sort_field}, descending."
-                            )
+                        logger.debug(msg)
 
+                        if len(specs) > 1:
+                            # Sort specs
                             if sort_field in self.precomputed_length_fields:
                                 specs = specs.sort_values(
                                     by=self.precomputed_length_fields[sort_field],
@@ -167,18 +167,26 @@ class ModelDesignationDeriver:
                             or re.match(r"FO_\d+", model_designation)  # FO_*-types
                             or re.match(r"FO_\d+", turbine_type)  # FO_*-types
                         ):
-                            # Follow link
                             if not (
                                 turbine_type == model_designation
-                                and field == ["model_designation"]
+                                and field == "model_designation"
                             ):
+                                # Follow link
                                 return self.by_turbine_type(
                                     model_designation,
                                     fields=["model_designation"],
                                     row_data=row_data,
                                 )
-                        else:
-                            return model_designation, matched_line_index, row_data_used
+
+                            # No match found
+                            return None, -1, False
+
+                        return model_designation, matched_line_index, row_data_used
+
+                    logger.debug(
+                        f"Found {len(specs)} specs with {field}={turbine_type} "
+                        "but non with a given model_designation."
+                    )
 
                     # This spec doesn't result in a model designation directly;
                     # store for further investigation if no direct matches can be found

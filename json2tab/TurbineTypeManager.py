@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -207,7 +208,7 @@ class TurbineTypeManager:
         """
         specs_files = unify_file_list(specs_data_file)
 
-        logger.debug(
+        logger.info(
             "Loading windturbine type specs data from the following "
             f"file{'(s)' if len(specs_files) > 1 else ''}: "
             f"{' '.join(str(p) for p in specs_files)}"
@@ -263,6 +264,11 @@ class TurbineTypeManager:
             )
 
         specs_df = self._add_computed_fields(specs_df)
+        logger.info(
+            f"Columns available in new turbine type specs dataframe: "
+            f"{', '.join(specs_df.columns)}"
+        )
+
         self.specs_df_full = pd.concat([self.specs_df_full, specs_df])
 
         # Set all nan's to None in specs table
@@ -306,9 +312,9 @@ class TurbineTypeManager:
                 # Remove full N/A columns from dataset
                 specs = specs.dropna(axis="columns", how="all")
 
-            logger.info(
-                f"Loaded {len(specs)} turbine specifications using "
-                f"{loader}-format from {specs_file!s}"
+            logger.debug(
+                f"Loaded {len(specs)} turbine specifications from {specs_file!s} using "
+                f"{loader}-file loader"
             )
 
             # Mapping of renames of columns
@@ -327,7 +333,7 @@ class TurbineTypeManager:
                     specs = specs.rename(columns={source: target})
 
             logger.debug(
-                f"Columns available: {', '.join(specs.columns)} from {specs_file!s}"
+                f"Specs data available: {', '.join(specs.columns)} from {specs_file!s}"
             )
 
             # Store source file to dataframe for debug purposes
@@ -345,9 +351,7 @@ class TurbineTypeManager:
             source_name = "turbine_model"
 
         if source_name:
-            logger.info(
-                f"Compute model designation for all specs based on source={source_name}"
-            )
+            logger.debug(f"Compute model designation based on source={source_name}")
             specs_df["model_designation"], specs_df["is_known_manufacturer"] = zip(
                 *specs_df.apply(
                     lambda row: build_model_designation_from_rowdata(row, source_name),
@@ -367,11 +371,6 @@ class TurbineTypeManager:
 
         specs_df["model_designation_length"] = specs_df["model_designation"].apply(
             safe_length
-        )
-
-        logger.info(
-            f"Columns available in turbine type specs dataframe: "
-            f"{', '.join(specs_df.columns)}"
         )
 
         return specs_df
@@ -421,8 +420,8 @@ def filter_specs(specs: pd.DataFrame) -> pd.DataFrame:
     ]
 
     logger.info(
-        f"Filtered turbine specifications to {len(filtered_specs)} turbines "
-        "with known manufacturer, windspeed-data and model_designation."
+        f"Selected {len(filtered_specs)} turbine specifications (out of {len(specs)} "
+        "specifications) with known manufacturer, windspeed-data and model_designation."
     )
 
     dump_specs(filtered_specs, "specsdump-filtered.csv")
@@ -535,30 +534,31 @@ def build_model_designation_from_rowdata(row, model_name_source: str) -> Tuple[s
     forbidden_values = [None, ""]
 
     # Don't recompute model_designation if it is stored in row-data
-    model_designation = row.get("model_designation", None)
+    model_designation = row.get("model_designation")
     if model_designation not in forbidden_values:
-        is_known_manufacturer = row.get("is_known_manufacturer")
+        is_known_manufacturer = row.get("is_known_manufacturer", False)
         return model_designation, is_known_manufacturer
 
     # First approach: use source_name/turbine_model-field to get model_name_data
     model_name_data = row.get(model_name_source, None)
-    specs_model_name = None
+    specs_model_name = {}
 
     if model_name_data not in forbidden_values:
         specs_model_name = parse_model_name(model_name_data)
-        model_designation = specs_model_name["model_designation"]
-        is_known_manufacturer = specs_model_name["is_known_manufacturer"]
+        model_designation = specs_model_name.get("model_designation")
+        is_known_manufacturer = specs_model_name.get("is_known_manufacturer", False)
     else:
         model_designation = None
         is_known_manufacturer = False
 
     # Alternative approach: construct model_designation from row-data
-    manufacturer = row["manufacturer"] if "manufacturer" in row else None
+    manufacturer = row.get("manufacturer")
 
     try:
+        specs_manufacturer = specs_model_name.get("manufacturer")
         # Fallback to parsed manufacturer if that one is richer
-        if len(specs_model_name["manufacturer"]) > len(manufacturer):
-            manufacturer = specs_model_name["manufacturer"]
+        if len(specs_manufacturer) > len(manufacturer):
+            manufacturer = specs_manufacturer
     except (TypeError, IndexError):
         pass
 
@@ -604,5 +604,11 @@ def build_model_designation_from_rowdata(row, model_name_source: str) -> Tuple[s
                 model_designation = model_designation_generated
         else:
             model_designation = model_designation_generated
+
+    knmi_match = re.search(r"^KN_\d+", row.get("type_code", ""), re.IGNORECASE)
+
+    if model_designation in forbidden_values and knmi_match is not None:
+        model_designation = model_name_data or knmi_match.group(0)
+        is_known_manufacturer = True
 
     return model_designation, is_known_manufacturer

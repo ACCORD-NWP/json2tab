@@ -60,7 +60,7 @@ class TurbineTypeTabFileWriter:
             config_output_files.get("type_index_length"), default=3
         )
 
-        self.data_range = type_spec.get("windspeed_range", "cut-in:0.5:cut-out")
+        self.data_range = type_spec.get("windspeed_range", "cut-in:0.5:cut-out#>100")
         self.extend_to_35ms = type_spec.get("extend_to_35ms", False)
         self.bypass_cutout = type_spec.get("bypass_cutout", False)
 
@@ -315,4 +315,7 @@ def int_value_or_default(data, default: int) -> int:
         except (ValueError, TypeError):
             return default
 
-    return data or default
+    if data is not None:
+        return data
+
+    return default
