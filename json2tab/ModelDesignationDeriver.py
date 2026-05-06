@@ -302,6 +302,10 @@ class ModelDesignationDeriver:
             additional_data = {}
         data = parse_model_name(model_designation)
 
+        if not data["is_matched"]:
+            # Parsing input model_designation as model name failed; don't continue
+            return model_designation, False
+
         manufacturer = data["manufacturer"]
         diameter = get_diameter(data)
         power = get_rated_power_kw(data, guess_unit=False)
@@ -340,7 +344,7 @@ class ModelDesignationDeriver:
                     manufacturer_pattern, case=False, na=False
                 )
             ]
-            filter_str += f"manufacturer should match = {manufacturer_pattern}, "
+            filter_str += f"manufacturer should match {manufacturer_pattern}, "
 
         elif manufacturer:
             turbine_types = turbine_types[
@@ -357,12 +361,18 @@ class ModelDesignationDeriver:
 
         if power and power > 0 and exact_power_match:
             thresshold = (float(power) / 750) / 100
-            turbine_types = turbine_types[
-                abs(turbine_types["rated_power"].astype(float) - float(power))
-                / float(power)
-                < thresshold
-            ]
-            filter_str += f"power = {power} +/- {int(thresshold * 100)}%, "
+            if int(thresshold * 100) > 0:
+                turbine_types = turbine_types[
+                    abs(turbine_types["rated_power"].astype(float) - float(power))
+                    / float(power)
+                    < thresshold
+                ]
+                filter_str += f"power = {power} +/- {int(thresshold * 100)}%, "
+            else:
+                turbine_types = turbine_types[
+                    abs(turbine_types["rated_power"].astype(float) - float(power)) < 1
+                ]
+                filter_str += f"power = {power} +/- 1, "
 
         if len(turbine_types) > 1:
             filtered = turbine_types[turbine_types["rated_power"].astype(float) > 0]
@@ -408,6 +418,16 @@ class ModelDesignationDeriver:
                     break
 
             filter_str += f"power = {power} +/- {int(thresshold * 100)}%, "
+
+        if len(turbine_types) > 1 and manufacturer is not None:
+            filtered = turbine_types[
+                turbine_types["manufacturer"].str.match(
+                    manufacturer, case=False, na=False
+                )
+            ]
+            if len(filtered) > 0:
+                turbine_types = filtered
+                filter_str += f"manufacturer = {manufacturer}, "
 
         # Strip off final ', ' part of filter_str
         if len(filter_str) > 2:

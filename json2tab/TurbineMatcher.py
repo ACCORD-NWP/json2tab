@@ -13,6 +13,7 @@ from .io.write_statistics import inject_suffix_in_filename, write_statistics
 from .io.writers import generate_output_filename
 from .logs import logger
 from .ModelDesignationDeriver import ModelDesignationDeriver
+from .ModelNameBuilder import ensure_manufacturer_prefix
 from .ProbabilisticMapper import ProbabilisticMapper
 from .TurbineLocationManager import TurbineLocationManager
 from .TurbineTypeManager import TurbineTypeManager
@@ -468,6 +469,14 @@ class TurbineMatcher:
                 # Extend turbine_type with manufacturer info
                 extended_type = f"{man_code} {turbine_type}"
 
+        if extended_type is None:
+            # extended model name starts with manufacturer-name
+            extended_type = ensure_manufacturer_prefix(turbine_type)
+            if extended_type != turbine_type and manufacturer is None:
+                manufacturer = extended_type.split(turbine_type)[0].strip()
+            else:
+                extended_type = None
+
         lon = turbine.get("longitude")
         lat = turbine.get("latitude")
         country = turbine.get("country")
@@ -513,31 +522,24 @@ class TurbineMatcher:
         fallback = None
         for do_enriching, prefix in zip([False, True], ["", "Enriched:"]):
             sources = [extended_type, turbine_type]
-            types = []
-            for _type in sources:
-                if not do_enriching:
-                    types.append(_type)
-                else:
-                    _type_enriched = None
-
-                    if _type is not None:
-                        (
-                            _type_enriched,
-                            _,
-                        ) = self.model_designation_deriver.enrich_model_designation(
-                            _type, additional_data=turbine
-                        )
-                        if _type_enriched == _type:
-                            _type_enriched = None
-
-                    types.append(_type_enriched)
-
             labels = ["Manufacturer+TurbineType", "TurbineType"]
-            for _type, _source, label in zip(
-                types, sources, [prefix + label for label in labels]
-            ):
+
+            for source, label in zip(sources, [prefix + label for label in labels]):
+                _type = source if not do_enriching else None
+                if do_enriching and source is not None:
+                    (
+                        _type,
+                        _,
+                    ) = self.model_designation_deriver.enrich_model_designation(
+                        source, additional_data=turbine
+                    )
+
+                    # Only check for newly enriched types
+                    if _type == source:
+                        _type = None
+
                 if _type is not None:
-                    source_postfix = f" from '{_source}'" if _type != _source else ""
+                    source_postfix = f" from '{source}'" if _type != source else ""
                     logger.debug(
                         "Try to derive model designation from "
                         f"turbine_type='{_type}'{source_postfix} by {label}."
@@ -565,7 +567,7 @@ class TurbineMatcher:
                             )
 
                             self.add_to_cache(
-                                turbine_type=list({_type, _source, turbine_type}),
+                                turbine_type=list({_type, source, turbine_type}),
                                 model_designation=model_designation,
                                 matched_line_index=matched_line_index,
                             )
@@ -595,7 +597,7 @@ class TurbineMatcher:
                     specs,
                     matched_line_index,
                 ) = self.turbine_type_manager.get_specs_by_tower_properties(
-                    diameter=diameter, power=power
+                    manufacturer=manufacturer, diameter=diameter, power=power
                 )
 
                 if specs is not None:
@@ -604,15 +606,15 @@ class TurbineMatcher:
                     if model_designation:
                         logger.info(
                             f"Model designation for tower with "
-                            f"diameter={diameter}, power={power} "
-                            f"is set to '{model_designation}' "
+                            f"manufacturer={manufacturer}, diameter={diameter}, "
+                            f"power={power} is set to '{model_designation}' "
                             "by TurbineTypeManager (by tower properties) "
                             f"(match found in dataframe on index={matched_line_index})."
                         )
                         return (
                             model_designation,
                             matched_line_index,
-                            "DatabaseLookup(TowerProperties:power+diameter)",
+                            "DatabaseLookup(TowerProperties:manufacturer+power+diameter)",
                         )
 
             # [Option 6]: Use tower properties to derive model_designation for this tower
@@ -620,7 +622,7 @@ class TurbineMatcher:
                 specs,
                 matched_line_index,
             ) = self.turbine_type_manager.get_specs_by_tower_properties(
-                diameter=diameter, height=height, power=power
+                manufacturer=manufacturer, diameter=diameter, height=height, power=power
             )
 
             if specs is not None:
@@ -629,15 +631,15 @@ class TurbineMatcher:
                 if model_designation:
                     logger.info(
                         f"Model designation for tower with "
-                        f"diameter={diameter}, height={height}, power={power} "
-                        f"is set to '{model_designation}' "
-                        "by TurbineTypeManager (by tower properties) "
+                        f"manufacturer={manufacturer}, diameter={diameter}, "
+                        f"height={height}, power={power} is set to '{model_designation}'"
+                        " by TurbineTypeManager (by tower properties) "
                         f"(match found in dataframe on index={matched_line_index})."
                     )
                     return (
                         model_designation,
                         matched_line_index,
-                        "DatabaseLookup(TowerProperties:power+height+diameter)",
+                        "DatabaseLookup(TowerProperties:manufacturer+power+height+diameter)",
                     )
 
         # [Option 5]: Use the dimension/location mapper to get a guess for turbine_type

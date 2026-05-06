@@ -12,38 +12,9 @@ from .ModelNameBuilder import ensure_manufacturer_prefix
 from .utils import power_to_kw
 
 
-def parse_model_name(model_name: str) -> dict:
-    """Parses a turbine model name to retrieve possible model_designation.
-
-    Fruther - if possible - manufacturer, diameter, and power are retrieved.
-
-    Args:
-        model_name (str): Full turbine model name (e.g., "VESTAS V90 3.0MW")
-
-    Returns:
-        dict: A dictionary with - if possible -
-                *) model_designation,
-                *) manufacturer,
-                *) diameter,
-                *) power
-    """
-    # Remove all multiple spaces from model name
-    model_name = re.sub(r"\s\s+", " ", str(model_name))
-
-    # Ensure model name starts with manufacturer-name
-    model_name = ensure_manufacturer_prefix(model_name)
-
-    match = re.search(r"(?P<manufacturer>\w+), ", model_name)
-    if match:
-        # It looks like manufacturer and type are separated with a comma
-        # so remove the first comma that separates manufacturer and type
-        model_name = model_name.replace(", ", " ", 1)
-
-    # Replace all commas by dots
-    model_name = model_name.replace(",", ".")
-
-    # Look for turbine model patterns within the name
-    patterns = [
+def get_turbine_model_patterns():
+    """Gets a list of regex expressions to match turbine models."""
+    return [
         # Common naming patterns for major manufacturers
         # Vestas pattern (e.g., V90, V112)
         r"(?P<manufacturer>(Vestas Onshore)|Vestas|(MHI Vestas Offshore)|(MHI Vestas)|MVOW)(\s|-)V(-|\s)?(?P<diameter>\d{2,3})(\s*-\s*(?P<power>\d+(\.\d+)?))?",
@@ -54,9 +25,9 @@ def parse_model_name(model_name: str) -> dict:
         r"(?P<manufacturer>Bonus|Combi) (?P<diameter>\d+)/(?P<powerKW>\d+(\.\d+)?)",
         r"(?P<manufacturer>Gamesa|Bonus)(\s|-)(G|B)?(-|\s)?(?P<diameter>\d+)([-|/](?P<power>\d+(\.\d+)?))?(\s?(?P<known_unit>(kW)|(MW)))?",
         # Siemens / Gamesa / Siemens-Gamesa pattern (e.g., SWT-3.6-120)
-        r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT)\s?(SWT|SG|G)?((-|\s)?(DD-(?P<power>\d+(\.\d+)?)))-(?P<diameter>\d+)",
-        r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT)\s?(SWT|SG|G)?((-|\s)?(DD|(D?(?P<power>\d+(\.\d+)?))))?-(?P<diameter>\d+)?",
-        r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT) SG-(?P<diameter>\d+)",
+        r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT|(Siemens Wind))\s?(SWT|SG|G)?((-|\s)?(DD-(?P<power>\d+(\.\d+)?)))-(?P<diameter>\d+)",
+        r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT|(Siemens Wind))\s?(SWT|SG|G)?((-|\s)?(DD|(D?(?P<power>\d+(\.\d+)?))))?-(?P<diameter>\d+)?",
+        r"(?P<manufacturer>(Siemens(\s|-)Gamesa)|Siemens|Gamesa|(AN(-|\s))?Bonus|SWT|(Siemens Wind)) SG-(?P<diameter>\d+)",
         # Senvion, REpower pattern
         r"(?P<manufacturer>Kenersys) K\s?(?P<diameter>\d+)\s(?P<powerMW>\d+(\.\d+)?)MW",
         r"(?P<manufacturer>Senvion|REpower|(Jacobs PowerTec JPT)|(Jacobs Wind Electric)|Jacobs|(HSW Husumer Schiffs)|Kenersys)(\s|-|\.)\s?(M|HSW)?\s?(?P<power>\d+(\.(\d+|X))?)?((M|D|/|\s|-)\s?(?P<diameter>\d+))?((/|\s)(?P<power2>\d+(\.\d+)?))?",
@@ -82,15 +53,31 @@ def parse_model_name(model_name: str) -> dict:
         # Nordex (eg Nordex N131/3300, Nordex N149/4.0-4.5, Nordex N149/5.X, Nordex N90)
         r"(?P<manufacturer>Nordex|Sudwind|Suedwind|Südwind) (N|S)(\s|-)?(?P<diameter>\d+)((/(?P<power>\d+(\.(\d+|X|x))?))(-\d(\.\d+)?)?)?",
         # Tacke (eg Tacke TW 1.5i)
-        r"(?P<manufacturer>Tacke)\s+(TW|WR|TZ)\s?(?P<power>\d+(\.\d+))[a-z]+",
+        r"(?P<manufacturer>Tacke)\s+(TW|WR|TZ)\s?(?P<power>\d+(\.\d+)?)[a-z]*",
+        # DWT Danish Wind Tech  Windane 40
+        r"(?P<manufacturer>(DWT Danish Wind Tech)|DWT)\s+(Windane|DWT)?\s?(?P<diameter>\d+)",
         # iea (eg iea 15MW)
         r"(?P<manufacturer>iea) (?P<powerMW>(\d+(\.\d+)?))(MW)?",
         # BARD pattern (eg BARD  6.5, BARD  VM)
         r"(?P<manufacturer>BARD) (?P<power>(\d+(\.\d+)?)|V)M?",
         # Seawind (eg Seawind  18 - 260)
         r"(?P<manufacturer>Seawind) (?P<powerMW>\d+(\.\d)?)(MW)?(\s?-\s?(?P<diameter>\d+))?",
+        # 2-B Energy (eg 2-B Energy 2B6)
+        r"(?P<manufacturer>(2-?B Energy)) (2B)?(?P<powerMW>\d+(\.\d)?)(MW)?",
+        # Alstom/Ecotècnia (eg Alstom ECO 80/1670, ecotècnia  ECO 28/225)
+        r"(?P<manufacturer>Alstom|Ecot(è|e)cnia)\s+(ECO|Haliade)?\s?(?P<diameter>\d+)((/|\s|-)(?P<power>\d+(\.\d+)?))?",
+        # XEMC Darwind (eg XEMC DARWIND XD137)
+        r"(?P<manufacturer>(XEMC Darwind)|XEMC( Ltd)?|Darwind) (X(E|V|D|E/DD))(\s?(?P<diameter>\d+))(\s(?P<powerMW>\d+(\.\d)?))?",
         # GE/Enron pattern (eg General Electric  GE 3.2 -103, GE General Electric  GE 3.4-137, GE General Electric  GE 3.6s, Cypress 6.0-164)
-        r"(?P<manufacturer>(GE General Electric)|(General Electric)|GE|Enron|Cypress)(\s+(Wind|Energy|EN|GE|Haliade|Haliade-X))?(\s|-)(?P<power>\d+(\.\d+)?)\s?((-(?P<power_max>\d+(\.\d+)?))?-\s?(?P<diameter>\d+(\.\d+)?)?)?w*",
+        r"(?P<manufacturer>(GE General Electric)|(General Electric)|(GE Wind)|GE|Enron|Cypress)(\s+(Wind|Energy|EN|GE|((GE )?(Haliade)(-X)?)))?(\s|-)(?P<power>\d+(\.\d+)?)\s?(?P<known_unit>MW)?((-(?P<power_max>\d+(\.\d+)?))?-\s?(?P<diameter>\d+(\.\d+)?)?)?(?P<known_unit2>MW)?(?P<suffix>\w*)",
+        # Bouma pattern (eg Bouma 160/20)
+        r"(?P<manufacturer>Bouma)\s+(?P<powerKW>\d+)((/|\s|-)(?P<diameter>\d+))?",
+        # Lagerwey pattern (eg Lagerwey  LW 58/750, Lagerwey L93 2.6 MW)
+        r"(?P<manufacturer>Lagerwey)(\s|-)+(L|LW)?\s*(?P<diameter>\d+)((/|\s|-)(?P<power>\d+(\.\d+)?)(\s?(?P<known_unit>kW|MW))?)?",
+        # WindMaster pattern (eg WindMaster / HMZ  WM 1300, TURBOWINDS  T400-34)
+        r"(?P<manufacturer>WindMaster|HMZ|Turbowinds|(WindMaster / HMZ))\s+((WM|T|TML)\s?)?(?P<powerKW>\d+)((/|\s|-)(?P<diameter>\d+))?",
+        # Newinco / NedWind pattern (eg NedWind  NW 46/500 )
+        r"(?P<manufacturer>Newinco|NedWind)\s+(NW|NedWind)?\s*(?P<diameter>\d+)(-(?P<revision>\d))?((/|\s|(\s(PI|PS)\s))(?P<powerKW>\d+))?",
         # NEG Micon pattern (eg NEG Micon  NM 43/600, NEG Micon  NM 54/950 )
         r"(?P<manufacturer>(NEG(\s|-)Micon)|NEG|Micon|(NEG Wind World)|(Wind World))\s+(NM|M|W|WW)?\s*(?P<diameter>\d+)C?((/|-)(?P<powerKW>\d+))?",
         # Nordtank pattern (eg Nordtank  NTK 1500 64)
@@ -114,7 +101,9 @@ def parse_model_name(model_name: str) -> dict:
         # THYmøllen pattern (eg THYmøllen TWP40-10 )
         r"(?P<manufacturer>(THY møllen( Aps)?)|THYmøllen|THY) TWP(-|\s)?(?P<swept_area>\d+)-(?P<powerKW>\d+(\.\d+)?)",
         # Seewind pattern (eg Seewind  S 52 750 )
-        r"(?P<manufacturer>Seewind) (S\s?)?(?P<diameter>\d+)(\s|/)(?P<powerKW>\d+)",
+        r"(?P<manufacturer>Seewind( Windenergiesysteme)?) (S\s?)?(?P<diameter>\d+)(\s|/)(?P<powerKW>\d+)",
+        # Eocycle  EO20
+        r"(?P<manufacturer>Eocycle) EOX?( M-?)?(?P<powerKW>\d+(\.\d+)?)",
         # DWP pattern (eg DWP D150/22 )
         r"(?P<manufacturer>DWP|(Windpower D)) D?\s?(?P<powerKW>\d+)(/(?P<diameter>\d+))?",
         # Kleinwind pattern (eg Kleinwind GmbH  Schachner Windrad SW10 )
@@ -159,12 +148,67 @@ def parse_model_name(model_name: str) -> dict:
         r"[A-Z]+\d+((-|\.|/)\d+(\.\d+)?)?",
     ]
 
+
+def get_manufacturer_patterns():
+    """Gets list of all manufacturer match patterns."""
+    model_patterns = get_turbine_model_patterns()
+    return list(set([get_manufacturer_match_pattern(regex) for regex in model_patterns]))
+
+
+def get_manufacturer_pattern(manufacturer: str):
+    """Gets regex patterns that matches to a given manufacturer."""
+    manufacturer_patterns = get_manufacturer_patterns()
+    return list(
+        set(
+            [
+                regex
+                for regex in manufacturer_patterns
+                if re.search(f"^{regex}", manufacturer, re.IGNORECASE)
+            ]
+        )
+    )
+
+
+def parse_model_name(model_name: str) -> dict:
+    """Parses a turbine model name to retrieve possible model_designation.
+
+    Fruther - if possible - manufacturer, diameter, and power are retrieved.
+
+    Args:
+        model_name (str): Full turbine model name (e.g., "VESTAS V90 3.0MW")
+
+    Returns:
+        dict: A dictionary with - if possible -
+                *) model_designation,
+                *) manufacturer,
+                *) diameter,
+                *) power
+    """
+    # Remove all multiple spaces from model name
+    model_name = re.sub(r"\s\s+", " ", str(model_name))
+
+    # Ensure model name starts with manufacturer-name
+    model_name = ensure_manufacturer_prefix(model_name)
+
+    match = re.search(r"(?P<manufacturer>\w+), ", model_name)
+    if match:
+        # It looks like manufacturer and type are separated with a comma
+        # so remove the first comma that separates manufacturer and type
+        model_name = model_name.replace(", ", " ", 1)
+
+    # Replace all commas by dots
+    model_name = model_name.replace(",", ".")
+
+    # Look for turbine model patterns within the name
+    patterns = get_turbine_model_patterns()
+
     model_designation = None
     manufacturer = None
     power = None
     diameter = None
     manufacturer_match_pattern = None
     is_known_manufacturer = False
+    is_matched = False
 
     known_unit = None
 
@@ -172,6 +216,7 @@ def parse_model_name(model_name: str) -> dict:
     for pattern in patterns:
         match = re.search(f"^{pattern}", model_name, re.IGNORECASE)
         if match:
+            is_matched = True
             try:
                 manufacturer_match_pattern = get_manufacturer_match_pattern(pattern)
                 is_known_manufacturer = manufacturer_match_pattern is not None
@@ -223,6 +268,15 @@ def parse_model_name(model_name: str) -> dict:
                     and match.group("diameter") is not None
                 ):
                     swap_power_diameter = True
+            except (ValueError, IndexError, TypeError):
+                pass
+
+            try:
+                if known_unit is None:
+                    known_unit = match.group("known_unit2")
+                    # known_unit2 is a suffix for diameter; so swap power and diameter
+                    if known_unit is not None:
+                        swap_power_diameter = True
             except (ValueError, IndexError, TypeError):
                 pass
 
@@ -370,7 +424,8 @@ def parse_model_name(model_name: str) -> dict:
                 diameter = 2 * radius
 
             if manufacturer is not None and manufacturer.upper() in [
-                x.upper() for x in ["NEG", "NEG-Micon", "NEG Micon", "Acciona"]
+                x.upper()
+                for x in ["NEG", "NEG-Micon", "NEG Micon", "Acciona", "WindMaster"]
             ]:
                 # Check if we need to swap power and diameter for some manufacturers
                 # as they seem to be less consistent with diameter/power
@@ -435,7 +490,7 @@ def parse_model_name(model_name: str) -> dict:
             break
 
     # Remove dash between manufacturer and model name
-    if model_designation:
+    if model_designation and manufacturer not in ["2-B Energy"]:
         posDash = model_designation.find("-")
         posSpace = model_designation.find(" ")
 
@@ -453,6 +508,7 @@ def parse_model_name(model_name: str) -> dict:
         "power": power,
         "power_kw": power,
         "is_known_manufacturer": is_known_manufacturer,
+        "is_matched": is_matched,
     }
 
 

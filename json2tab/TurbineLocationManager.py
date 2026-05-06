@@ -115,7 +115,7 @@ class TurbineLocationManager:
             self.turbines["country"].isna().any() or not fix_missing
         ):
             self.turbines = country_offshore_flag_fixer(
-                input=self.turbines,
+                self.turbines,
                 eez_file=eez_file,
                 land_file=land_file,
                 update_country=update_country,

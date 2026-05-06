@@ -14,6 +14,7 @@ from ..location_converters.country_data.netherlands import netherlands
 from ..location_converters.country_data.sweden import sweden
 from ..location_converters.country_data.thewindpower import thewindpower
 from ..location_converters.country_data.united_kingdom import united_kingdom
+from ..location_converters.country_data.windstats import windstats
 from ..location_converters.country_filters import (
     remove_from_countries,
     select_from_countries,
@@ -35,6 +36,8 @@ supported_conversion_types: List[str] = sorted(
         "fix_country_offshore",
         "fix_country_is_offshore",
         "netherlands",
+        "ws",
+        "windstats",
         "osm",
         "osm_windturbine",
         "osm_windfarm",
@@ -198,6 +201,9 @@ def converter(
 
             elif convert_type in ["twp", "thewindpower", "thewindpower.net"]:
                 thewindpower(input_filename, output_filename, rename_rules=rename_rules)
+
+            elif convert_type in ["ws", "windstats"]:
+                windstats(input_filename, output_filename, rename_rules=rename_rules)
 
             elif convert_type == "austria":
                 austria(input_filename, output_filename)

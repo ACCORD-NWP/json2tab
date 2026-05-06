@@ -112,14 +112,14 @@ def get_lat_lon_matrix(
             latitude = None
 
     if latitude is None:
-        lat_fields = ["latitude", "lat", "Latitude", "N"]
+        lat_fields = ["latitude", "lat", "Latitude", "Lat", "N"]
         for field in lat_fields:
             if field in cols:
                 latitude = get_values(data[field])
                 break
 
     if longitude is None:
-        lon_fields = ["longitude", "lon", "Longitude", "E"]
+        lon_fields = ["longitude", "lon", "long", "Longitude", "Lon", "Long", "E"]
         for field in lon_fields:
             if field in cols:
                 longitude = get_values(data[field])

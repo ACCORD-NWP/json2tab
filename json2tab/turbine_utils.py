@@ -133,7 +133,7 @@ def merge_turbine_data(
 
     manufacturer, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["manufacturer", "Manufacturer", "Manufacture", "Fabrikat"],
+            ["manufacturer", "Manufacturer", "Manufacture", "Fabrikat", "Fabrikant"],
             source if isinstance(source, dict) else source.to_dict(),
             default=default,
         ),
@@ -145,6 +145,7 @@ def merge_turbine_data(
         lambda source, default=None: get_value_from_dict(
             [
                 "type",
+                "Type",
                 "wt_type",
                 "WTYPE",
                 "turbine_type",
@@ -218,6 +219,7 @@ def merge_turbine_data(
                 "naam",
                 "Location",
                 "Projekteringsområde",
+                "Windpark",
             ],
             source if isinstance(source, dict) else source.to_dict(),
             default=default,
@@ -280,6 +282,7 @@ def merge_turbine_data(
                 "Date of original connection to grid",
                 "Uppfört",
                 "Commissioning date",
+                "Startdatum",
             ],
             source if isinstance(source, dict) else source.to_dict(),
             default,
@@ -299,6 +302,7 @@ def merge_turbine_data(
                 "Date of decommissioning",
                 "Nedmonterat",
                 "Decommissioning date",
+                "Einddatum",
             ],
             source if isinstance(source, dict) else source.to_dict(),
             default,

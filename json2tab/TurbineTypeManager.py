@@ -11,7 +11,7 @@ import pandas as pd
 
 from .logs import logger, logging
 from .ModelNameBuilder import build_model_designation
-from .ModelNameParser import parse_model_name
+from .ModelNameParser import get_manufacturer_pattern, parse_model_name
 from .utils import (
     get_diameter,
     get_height,
@@ -58,6 +58,7 @@ class TurbineTypeManager:
 
     def get_specs_by_tower_properties(
         self,
+        manufacturer: Optional[str] = None,
         diameter: Optional[float] = None,
         height: Optional[float] = None,
         power: Optional[float] = None,
@@ -68,6 +69,7 @@ class TurbineTypeManager:
         """Find closest matching turbine type with database lookup.
 
         Args:
+            manufacturer:(Optional) manufacturer of specific wind turbine tower
             diameter:    (Optional) diameter of specific wind turbine tower
             height:      (Optional) height of specific wind turbine tower
             power:       (Optional) rated power of specific wind turbine tower
@@ -80,6 +82,7 @@ class TurbineTypeManager:
         """
         logger.debug(
             f"Get model_designation by tower properties: "
+            f"manufacturer={manufacturer} (type={type(manufacturer).__name__}), "
             f"diameter={diameter} (type={type(diameter).__name__}), "
             f"height={height} (type={type(height).__name__}), "
             f"power={power} (type={type(power).__name__}), "
@@ -89,6 +92,19 @@ class TurbineTypeManager:
         )
 
         filtered_df = self.get_specs_dataframe(filtered=True)
+
+        if manufacturer is not None:
+            manufacturer_patterns = get_manufacturer_pattern(manufacturer)
+            if manufacturer_patterns:
+                filtered = []
+                for manufacturer_pattern in manufacturer_patterns:
+                    part = filtered_df[
+                        filtered_df["manufacturer"].str.match(
+                            manufacturer_pattern, case=False, na=False
+                        )
+                    ]
+                    filtered.append(part)
+                filtered_df = filtered[0] if len(filtered) == 1 else pd.concat(filtered)
 
         # Apply filters
         if False:

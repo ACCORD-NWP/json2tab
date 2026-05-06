@@ -70,11 +70,15 @@ def ensure_manufacturer_prefix(model_name: str) -> str:
         (r"^G(-|\s)?\d{2,3}", "Gamesa"),
         (r"^K(-|\s)?\d+", "Kenersys"),
         (r"^(NM|M)(-|\s)?\d+", "NEG Micon"),
+        (r"^\d.\dM\d{2,3}", "Senvion"),
         (r"^N(-|\s)?\d+", "Nordex"),
         (r"^V(-|\s)?\d{2,3}", "Vestas"),
         (r"^(W|WW)(-|\s)?\d{2,4}", "Wind World"),
         (r"^(GW|GWH)(-|\s)?\d+", "Goldwind"),
     ]
+
+    if model_name is None:
+        return model_name
 
     # Try each pattern in order
     for pattern, manufacturer in patterns:

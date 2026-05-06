@@ -215,6 +215,7 @@ def get_radius_from_dict(data: Dict, default: float = 0.0) -> float:
     diameter, _ = get_float_from_dict(
         [
             "diameter",
+            "Diameter",
             "diameter (m)",
             "rotor_diameter",
             "rotor diameter",
@@ -313,6 +314,7 @@ def get_height(specs: Dict | List[Dict], default: float = 0.0) -> float:
         "ash",
         "hoogte_paa",
         "Navhöjd (m)",
+        "Ashoogte",
     ]
 
     if isinstance(specs, list):
@@ -354,6 +356,7 @@ def get_rated_power_kw(
         "power_kw",
         "power_mw",
         "power",
+        "Vermogen",
         "vermogen_m",
         "P_rated",
         "nominal power (kW)",
