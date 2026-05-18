@@ -4,6 +4,7 @@ Input data based on MarktStammdatenRegister.
 """
 
 import os
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -17,7 +18,7 @@ def germany(
     input_filename: str,
     output_filename: Optional[str] = None,
     katalog_file: Optional[str] = None,
-    label_source: str = "Germany (MaStR)",
+    label_source: Optional[str] = None,
 ) -> pd.DataFrame:
     """Converter to generate wind turbine location files for Germany."""
     if output_filename is None:
@@ -38,6 +39,10 @@ def germany(
 
     if label_source is None:
         _, label_source = os.path.split(input_filename)
+        if label_source == "EinheitenWind.xml":
+            label_source = Path(input_filename).parent.name
+        if label_source.startswith("Gesamtdatenexport"):
+            label_source = f"Germany (MaStR {label_source.replace('_', ' ')})"
     logger.info(f"Set source-field for {input_filename} to '{label_source}'")
 
     df_in = pd.read_xml(input_filename, encoding="utf-16")
@@ -64,7 +69,7 @@ def germany(
 
         start_date = row.get("InbetriebnahmedatumAmAktuellenStandort")
         if start_date is None:
-            start_date = (row.get("Inbetriebnahmedatum"),)
+            start_date = row.get("Inbetriebnahmedatum")
 
         turbine = Turbine(
             id=row.get("EinheitMastrNummer"),

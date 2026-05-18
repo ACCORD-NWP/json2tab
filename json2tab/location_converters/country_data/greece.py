@@ -33,7 +33,7 @@ def greece(
     if label_source is None:
         _, wf_file = os.path.split(input_windfarm_filename)
         _, wt_file = os.path.split(input_windturbine_filename)
-        label_source = f"{wf_file}+{wt_file}"
+        label_source = f"{wf_file}&{wt_file}"
     logger.info(
         f"Set source-field for {input_windfarm_filename}+{input_windturbine_filename} "
         f"to '{label_source}'"
@@ -73,7 +73,7 @@ def greece(
                 if key_en is not None:
                     props_en[key_en] = value
 
-            props_en["source"] = "Greece windfarm data"
+            props_en["source"] = label_source
             props_en["country"] = "Greece"
             props_en["geometry"] = geometry
             windfarms.append(props_en)

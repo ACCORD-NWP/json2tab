@@ -1,5 +1,6 @@
 """Module to read pandas dataframe with wind turbine location data from file."""
 
+import contextlib
 import json
 import os
 from typing import Optional
@@ -279,8 +280,24 @@ def parse_rules(rules: str | dict) -> dict:
 
     rule_list = rules.split(",")
     for rule in rule_list:
-        [key, value] = rule.split("=")
-        rule_dict[key.strip(syms)] = value.strip(syms)
+        [key, val] = rule.split("=")
+        key = key.strip(syms)
+        val = val.strip(syms)
+
+        with contextlib.suppress(Exception):
+            translate_key = "#->"
+            if translate_key in val:
+                [old_value, new_value] = val.split(translate_key)
+                old_value = old_value.strip(syms)
+                new_value = new_value.strip(syms)
+                val = {old_value: new_value}
+
+        if key not in rule_dict:
+            rule_dict[key] = val
+        elif isinstance(rule_dict[key], dict):
+            rule_dict[key].update(val)
+        else:
+            rule_dict[key] = {None: rule_dict[key]} | val
 
     if len(rule_dict) > 0:
         logger.info(f"Parsed rules: {rule_dict}")

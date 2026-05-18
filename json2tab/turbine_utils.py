@@ -392,15 +392,19 @@ def merge_turbine_data(
 
     # Determine source
     if alternative_used:
-        source1 = preferred_source.get("source", "")
-        source2 = alternative_source.get("source", "")
-
-        if source1 and source2:
-            created_source_name = f"{source1}+{source2}"
+        if merged_source_name:
+            source = merged_source_name
         else:
-            created_source_name = f"{source1}{source2}"
+            sources1 = preferred_source.get("source")
+            if not isinstance(sources1, str):
+                sources1 = ""
+            sources1 = sources1.split("+")
 
-        source = merged_source_name or created_source_name
+            sources2 = alternative_source.get("source")
+            if not isinstance(sources2, str):
+                sources2 = ""
+            sources2 = sources2.split("+")
+            source = "+".join(set(sources1) | set(sources2))
     else:
         source = preferred_source.get("source")
 

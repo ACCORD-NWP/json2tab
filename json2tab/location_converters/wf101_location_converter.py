@@ -10,13 +10,16 @@ from ..io.writers import save_dataframe
 
 
 def wf101_location_converter(
-    input_filename: str, output_filename: Optional[str] = None
+    input_filename: str,
+    output_filename: Optional[str] = None,
+    label_source: Optional[str] = None,
 ) -> pd.DataFrame:
     """Read and convert WF101 wind turbine data to csv/geojson file.
 
     Args:
         input_filename:  Input file to the WF101 data file
         output_filename: Output file for the csv/geojson file
+        label_source:    Label for source field
 
     Returns:
         DataFrame with standardized WF101 turbine data
@@ -30,6 +33,9 @@ def wf101_location_converter(
     wf101_data = read_locationdata_from_txt_as_dataframe(input_filename)
 
     if wf101_data is not None:
+        if label_source is not None:
+            wf101_data["source"] = label_source
+
         save_dataframe(wf101_data, output_filename)
 
     return wf101_data

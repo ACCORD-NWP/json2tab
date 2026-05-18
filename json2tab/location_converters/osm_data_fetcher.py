@@ -33,6 +33,7 @@ def osm_data_fetcher(
     input_filename: Optional[str] = None,
     query_windturbine: Optional[bool] = True,
     query_windfarm: Optional[bool] = True,
+    source_label: Optional[str] = None,
     overpass_url: Optional[str] = None,
 ) -> pd.DataFrame:
     """OpenStreetMap wind turbine location data fetcher.
@@ -43,6 +44,7 @@ def osm_data_fetcher(
                                OverpassAPI call (i.e. use local/cached OSM data)
         query_windturbine (bool): Query wind_turbine data from OSM (default: True)
         query_windfarm (bool):    Query wind_farm data from OSM (default: True)
+        source_label (str):    Label for source of osm request
         overpass_url (str):    Url used for the overpass API call, some public
                                Overpass API instances can be found on
                                https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances
@@ -136,6 +138,9 @@ def osm_data_fetcher(
         if not data:
             logger.error("No data to process, reading aborted.")
             return None
+
+        if source_label is None:
+            source_label = "OSM"
 
         # Initialize a list to hold the data
         turbines = []
@@ -249,7 +254,7 @@ def osm_data_fetcher(
                     start_date=start_date,
                     wind_farm=site,
                     is_offshore=is_offshore,
-                    source="OSM",
+                    source=source_label,
                 )
 
                 if is_windturbine(element) and element["type"] == "relation":
@@ -296,16 +301,24 @@ def osm_data_fetcher(
 
         if len(windfarms) > 0 or query_windfarm:
             df_windfarms = pd.DataFrame(windfarms)
-            logger.info(
-                f"Generated dataframe with {len(df_windfarms.index)} "
-                f"windfarms with "
-                f"{int(sum(df_windfarms['n_turbines'].fillna(0)))} turbines "
-                f"({int(sum(df_windfarms['mapped_turbines'].fillna(0)))} "
-                "included in turbines)."
-            )
-            save_dataframe(df_windfarms, output_filename_windfarm)
+            n_turbines = 0
+            mapped_turbines = 0
 
-        save_dataframe(df_turbines, output_filename)
+            if len(df_windfarms) > 0:
+                n_turbines = int(sum(df_windfarms["n_turbines"].fillna(0)))
+                mapped_turbines = int(sum(df_windfarms["mapped_turbines"].fillna(0)))
+
+            logger.info(
+                f"Generated dataframe with {len(df_windfarms.index)} windfarms with "
+                f"{n_turbines} turbines ({mapped_turbines} included in turbines)."
+            )
+            if len(df_windfarms.index) > 0:
+                save_dataframe(df_windfarms, output_filename_windfarm)
+
+        if len(df_turbines) > 0:
+            save_dataframe(df_turbines, output_filename)
+        else:
+            logger.warning("Didn't found any windturbines in osm request.")
         data = df_turbines
 
     return data

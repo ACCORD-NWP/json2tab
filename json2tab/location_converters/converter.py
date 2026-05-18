@@ -89,6 +89,7 @@ def converter(
     rename_rules: Optional[str | dict] = None,
     write_columns: Optional[str | dict] = None,
     min_distance: Optional[float] = None,
+    label: Optional[str] = None,
     overpass_url: Optional[str] = None,
 ):
     """Entry point for different converters.
@@ -103,6 +104,7 @@ def converter(
         rename_rules (str | dict):         Rename rules to rename columns in input
         write_columns (str | dict):        Inject rules to write columns in output
         min_distance (float):              Min distance for remove_short_distance
+        label (str):                       Label as written as source
         overpass_url (str):                Url used for the overpass API call
     """
     # Process first multi-input file converters
@@ -144,15 +146,21 @@ def converter(
         ):
             # Swap arguments as the second argument seems to be the windfarm_file
             windfarm_file, windturbine_file = windturbine_file, windfarm_file
-        greece(windfarm_file, windturbine_file, output_filename)
+        greece(windfarm_file, windturbine_file, output_filename, label_source=label)
     elif convert_type == "osm":
-        osm_data_fetcher(output_filename, input_filenames[0], overpass_url=overpass_url)
+        osm_data_fetcher(
+            output_filename,
+            input_filenames[0],
+            source_label=label,
+            overpass_url=overpass_url,
+        )
     elif convert_type == "osm_windturbine":
         osm_data_fetcher(
             output_filename,
             input_filenames[0],
             query_windturbine=True,
             query_windfarm=False,
+            source_label=label,
             overpass_url=overpass_url,
         )
     elif convert_type == "osm_windfarm":
@@ -161,6 +169,7 @@ def converter(
             input_filenames[0],
             query_windturbine=False,
             query_windfarm=True,
+            source_label=label,
             overpass_url=overpass_url,
         )
     elif convert_type == "osm_windturbine_windfarm":
@@ -169,6 +178,7 @@ def converter(
             input_filenames[0],
             query_windturbine=True,
             query_windfarm=True,
+            source_label=label,
             overpass_url=overpass_url,
         )
 
@@ -200,34 +210,49 @@ def converter(
                 )
 
             elif convert_type in ["twp", "thewindpower", "thewindpower.net"]:
-                thewindpower(input_filename, output_filename, rename_rules=rename_rules)
+                thewindpower(
+                    input_filename,
+                    output_filename,
+                    rename_rules=rename_rules,
+                    label_source=label,
+                )
 
             elif convert_type in ["ws", "windstats"]:
-                windstats(input_filename, output_filename, rename_rules=rename_rules)
+                windstats(
+                    input_filename,
+                    output_filename,
+                    rename_rules=rename_rules,
+                    label_source=label,
+                )
 
             elif convert_type == "austria":
-                austria(input_filename, output_filename)
+                austria(input_filename, output_filename, label_source=label)
 
             elif convert_type == "denmark":
-                denmark(input_filename, output_filename)
+                denmark(input_filename, output_filename, label_source=label)
 
             elif convert_type == "finland":
-                finland(input_filename, output_filename)
+                finland(input_filename, output_filename, label_source=label)
 
             elif convert_type == "flanders":
-                flanders(input_filename, output_filename, min_distance=min_distance)
+                flanders(
+                    input_filename,
+                    output_filename,
+                    min_distance=min_distance,
+                    label_source=label,
+                )
 
             elif convert_type == "germany":
-                germany(input_filename, output_filename)
+                germany(input_filename, output_filename, label_source=label)
 
             elif convert_type == "italy":
-                italy(input_filename, output_filename)
+                italy(input_filename, output_filename, label_source=label)
 
             elif convert_type == "sweden":
-                sweden(input_filename, output_filename)
+                sweden(input_filename, output_filename, label_source=label)
 
             elif convert_type in ["uk", "unitedkingdom", "united_kingdom"]:
-                united_kingdom(input_filename, output_filename)
+                united_kingdom(input_filename, output_filename, label_source=label)
 
             elif convert_type in [
                 "wf2csv",
@@ -235,7 +260,9 @@ def converter(
                 "wf2geojson",
                 "wf101_to_geojson",
             ]:
-                wf101_location_converter(input_filename, output_filename)
+                wf101_location_converter(
+                    input_filename, output_filename, label_source=label
+                )
 
             elif convert_type == "remove_short_distance":
                 short_distance_remover(

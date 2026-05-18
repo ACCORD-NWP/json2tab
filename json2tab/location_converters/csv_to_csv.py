@@ -41,9 +41,16 @@ def csv_to_csv(
             data = data.rename(columns=parse_rules(rename_rules))
 
         if write_columns is not None:
-            for key, value in parse_rules(write_columns).items():
-                logger.info(f"Write data[{key}] = {value}")
-                data[key] = value
+            for key, val in parse_rules(write_columns).items():
+                val_dict = val if isinstance(val, dict) else {None: val}
+
+                for old_value, new_value in val_dict.items():
+                    if old_value is not None:
+                        data.loc[data[key] == old_value, key] = new_value
+                        logger.info(f"Translate data[{key}] {old_value} to {new_value}")
+                    else:
+                        logger.info(f"Write data[{key}] = {new_value}")
+                        data[key] = new_value
 
         # Convert read data rows to interpret the rows as standarized turbines
         data = standarize_dataframe(data)

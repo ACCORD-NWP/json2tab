@@ -79,7 +79,7 @@ def netherlands(
     rws_data["source"] = "Netherlands (RWS)"
     rws_data["is_offshore"] = True
 
-    merged_source_name = "Netherlands (RWS+RIVM)"
+    merged_source_name = "Netherlands (RWS and RIVM)"
     (
         rws_rivm_common,
         rivm_unique,

@@ -258,13 +258,17 @@ def main(argv=None):
             default=None,
         )
 
-    if location_merger is not None or TurbineWindfarmMapper is not None:
+    if (
+        location_merger is not None
+        or TurbineWindfarmMapper is not None
+        or converter is not None
+    ):
         parser.add_argument(
             "--labels",
             metavar="source labels",
             type=str,
             nargs="+",
-            help="Labels to specify source if not definied in files to merge",
+            help="Labels to specify source if not definied in input files",
             default=None,
         )
 
@@ -405,6 +409,7 @@ def main(argv=None):
                 rename_rules=args.rename_columns,
                 write_columns=args.write_columns,
                 min_distance=args.min_distance,
+                label=args.labels[0] if args.labels is not None else None,
                 overpass_url=args.overpass_url,
             )
         else:

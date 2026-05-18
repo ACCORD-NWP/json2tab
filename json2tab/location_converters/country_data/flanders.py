@@ -19,6 +19,7 @@ def flanders(
     input_filename: str,
     output_filename: Optional[str] = None,
     min_distance: Optional[float] = None,
+    label_source: Optional[str] = None,
 ) -> pd.DataFrame:
     """Converter to generate wind turbine location files for Flanders."""
     if output_filename is None:
@@ -44,6 +45,10 @@ def flanders(
     logger.debug(f"input filename: {input_filename}")
     logger.debug(f"output filename: {output_filename}")
 
+    if label_source is None:
+        _, label_source = os.path.split(input_filename)
+    logger.info(f"Set source-field for {input_filename} to '{label_source}'")
+
     data = gpd.read_file(input_filename)
 
     # Project data to WGS84 coordinate system
@@ -55,7 +60,6 @@ def flanders(
     data = data[data["gebouwd"] == "ja"]
 
     # Set some static fields for this dataset
-    data["source"] = "Flanders Onshore"
     data["country"] = "Belgium"
     data["is_offshore"] = False
 
@@ -78,6 +82,9 @@ def flanders(
         if turbine.hub_height is not None and max_height is not None:
             turbine.radius = max_height - turbine.hub_height
             turbine.diameter = 2 * turbine.radius
+
+        if turbine.source:
+            turbine.source = label_source
 
         turbines.append(turbine)
 
