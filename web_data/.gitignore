@@ -1,3 +1,4 @@
 *
 !.gitignore
 !Makefile
+!gen_mastr_version.py

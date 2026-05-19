@@ -16,7 +16,7 @@ PROVINCIE_BORDER_FILE:="$(PWD)/../static_data/worldmap/country_borders/WB_GAD_AD
 
 
 
-.PHONY: euromap basemap merge-countries web-update list clean init compress extract
+.PHONY: euromap basemap merge-countries web-update list clean init compress extract update
 
 COUNTRIES = germany france sweden united_kingdom netherlands denmark austria belgium italy bulgaria greece finland
 
@@ -35,8 +35,16 @@ basemap: init $(OUTPUT_FOLDER)/basemap.csv
 # All different countries
 merge-countries: init $(OUTPUT_FOLDER)/countries.csv
 
+update: web-update remove-euromap-link euromap
+
 web-update:
 	cd $(INPUT_FOLDER) && make
+
+remove-euromap-link:
+	rm -rf $(OUTPUT_FOLDER)/euromap.csv
+	rm -rf $(OUTPUT_FOLDER)/euromap.geojson
+	rm -rf euromap.csv
+	rm -rf euromap.geojson
 
 compress:
 	@echo "=== COMPRESS DATA TO TAR FILE ==="
@@ -196,7 +204,7 @@ $(OUTPUT_FOLDER)/france.csv:
 # ==============
 # GERMANY
 # ==============
-DE_REQ_STAMP:=$(shell ls -dv $(INPUT_FOLDER)/germany/Gesamtdatenexport_20*/ | tail -1 | sed -e s/[^0-9]//g)
+DE_REQ_STAMP:=$(shell ls -dv $(INPUT_FOLDER)/germany/Gesamtdatenexport_*/ | tail -1 | sed -e s/[^0-9]//g)
 germany: $(OUTPUT_FOLDER)/germany_$(DE_REQ_STAMP).csv
 $(OUTPUT_FOLDER)/germany.csv: $(OUTPUT_FOLDER)/germany_$(DE_REQ_STAMP).csv
 $(OUTPUT_FOLDER)/germany_$(DE_REQ_STAMP).csv:
@@ -247,7 +255,7 @@ $(OUTPUT_FOLDER)/austria.csv: $(OUTPUT_FOLDER)/osm.csv $(OUTPUT_FOLDER)/wf101.cs
 # ==============
 # SWEDEN
 # ==============
-SE_REQ_STAMP:=$(shell ls -v $(INPUT_FOLDER)/sweden/VBK_export_allman_prod_20*.xlsx | tail -1 | sed -e s/[^0-9]//g)
+SE_REQ_STAMP:=$(shell ls -v $(INPUT_FOLDER)/sweden/VBK_export_allman_prod_*.xlsx | tail -1 | sed -e s/[^0-9]//g)
 sweden: $(OUTPUT_FOLDER)/sweden_$(SE_REQ_STAMP).csv
 $(OUTPUT_FOLDER)/sweden.csv: $(OUTPUT_FOLDER)/sweden_$(SE_REQ_STAMP).csv
 $(OUTPUT_FOLDER)/sweden_$(SE_REQ_STAMP).csv:

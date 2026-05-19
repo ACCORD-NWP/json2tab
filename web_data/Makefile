@@ -4,7 +4,7 @@ TODAY_QUARTER:=$(shell date +%q)
 
 
 # Germany MaStR daten version (see https://www.marktstammdatenregister.de/MaStR/Datendownload or https://www.marktstammdatenregister.de/MaStRHilfe/subpages/releasenotes.html for latest version)
-GERMANY_DATEN_VERSION=26.1
+GERMANY_DATEN_VERSION=$(shell python -c "from gen_mastr_version import gen_mastr_version; print(gen_mastr_version())")
 
 .PHONY: all list clean compress extract
 
@@ -69,7 +69,6 @@ germany/Gesamtdatenexport_$(TODAY_STAMP)/EinheitenWind.xml:
 	wget https://download.marktstammdatenregister.de/Gesamtdatenexport_$(TODAY_STAMP)_$(GERMANY_DATEN_VERSION).zip -O germany/Gesamtdatenexport_$(TODAY_STAMP)_$(GERMANY_DATEN_VERSION).zip
 	unzip -j germany/Gesamtdatenexport_$(TODAY_STAMP)_$(GERMANY_DATEN_VERSION).zip EinheitenWind.xml Katalogwerte.xml -d germany/Gesamtdatenexport_$(TODAY_STAMP)
 	rm germany/Gesamtdatenexport_$(TODAY_STAMP)_$(GERMANY_DATEN_VERSION).zip
-	ln -sf $(PWD)/germany/Gesamtdatenexport_$(TODAY_STAMP) $(PWD)/germany/Gesamtdatenexport_latest
 
 
 denmark/data-oversigt-over-energisektoren.html:
@@ -87,7 +86,6 @@ france/windturbines_$(TODAY_STAMP).csv:
 	@echo """=== FRANCE ==="
 	@mkdir -p france/
 	wget "https://georisques.gouv.fr/services?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ms:eolienne_wfs&SRSNAME=urn:ogc:def:crs:EPSG::3857&OUTPUTFORMAT=CSV" -O france/windturbines_$(TODAY_STAMP).csv
-	ln -sf $(PWD)/france/windturbines_$(TODAY_STAMP).csv $(PWD)/france/windturbines_latest.csv
 
 
 netherlands: netherlands/rws netherlands/rivm
@@ -115,7 +113,6 @@ sweden/VBK_export_allman_prod_$(TODAY_STAMP).xlsx:
 	@echo """=== SWEDEN ==="
 	@mkdir -p sweden
 	wget "https://ext-dokument.lansstyrelsen.se/Gemensamt/Geodata/Externa%20dokument/VBK/VBK_export_allman_prod.xlsx" -O sweden/VBK_export_allman_prod_$(TODAY_STAMP).xlsx
-	ln -sf $(PWD)/sweden/VBK_export_allman_prod_$(TODAY_STAMP).xlsx $(PWD)/sweden/VBK_export_allman_prod_latest.xlsx
 
 
 
