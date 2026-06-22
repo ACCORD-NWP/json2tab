@@ -83,7 +83,7 @@ def flanders(
             turbine.radius = max_height - turbine.hub_height
             turbine.diameter = 2 * turbine.radius
 
-        if turbine.source:
+        if not turbine.source:
             turbine.source = label_source
 
         turbines.append(turbine)

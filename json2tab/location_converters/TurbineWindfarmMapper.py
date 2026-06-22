@@ -56,7 +56,9 @@ class TurbineWindfarmMapper:
         output_file: str,
         merge_mode: Optional[MergeStrategy | str] = MergeStrategy.Combine,
         source_label: Optional[str] = None,
-        rename_rules: Optional[str | dict] = None,
+        rename_rules: Optional[str | dict | tuple] = None,
+        filter_rules: Optional[str | dict | tuple] = None,
+        write_rules: Optional[str | dict | tuple] = None,
         max_distance: Optional[float] = None,
         merged_file=None,
         remaining_windfarm_file=None,
@@ -107,11 +109,26 @@ class TurbineWindfarmMapper:
                 f"written to {remaining_turbine_file}"
             )
 
+        if not isinstance(rename_rules, tuple):
+            rename_rules = (rename_rules, rename_rules)
+
+        if not isinstance(filter_rules, tuple):
+            filter_rules = (filter_rules, filter_rules)
+
+        if not isinstance(write_rules, tuple):
+            write_rules = (write_rules, write_rules)
+
         df_windfarms = read_locationdata_as_dataframe(
-            windfarm_file, rename_rules=rename_rules
+            windfarm_file,
+            rename_rules=rename_rules[0],
+            filter_rules=filter_rules[0],
+            write_rules=write_rules[0],
         )
         df_turbines = read_locationdata_as_dataframe(
-            turbine_file, rename_rules=rename_rules
+            turbine_file,
+            rename_rules=rename_rules[1],
+            filter_rules=filter_rules[1],
+            write_rules=write_rules[1],
         )
 
         n_turbines = (
@@ -195,8 +212,9 @@ class TurbineWindfarmMapper:
             if map_source_label is None:
                 map_source_label = f"{wf_turbine['source']}+{orig_turbine['source']}"
 
+            # Prefer turbine information over windfarm information (e.g. wrt location)
             merged_turbine = merge_turbine_data(
-                wf_turbine, orig_turbine, map_source_label
+                orig_turbine, wf_turbine, map_source_label
             )
             turbines.append(merged_turbine)
 

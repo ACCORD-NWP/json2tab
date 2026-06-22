@@ -93,13 +93,23 @@ def location_merger(
         df_file2["source"] = label_source2
         logger.info(f"Set source-field for {file2} to '{label_source2}'")
 
+    if (
+        df_file1["country"].isna().to_numpy().any()
+        or df_file2["country"].isna().to_numpy().any()
+    ):
+        merge_dataframe_func = merge_dataframes
+        logger.debug("Using global location merger to merge datasets.")
+    else:
+        merge_dataframe_func = merge_dataframes_per_country
+        logger.debug("Using location merger per country to merge datasets.")
+
     (
         merged_turbines,
         df_file1_unique,
         df_file2_unique,
         df_file1_duplicate,
         df_file2_duplicate,
-    ) = merge_dataframes(
+    ) = merge_dataframe_func(
         df_file1,
         df_file2,
         tol=min_distance,
@@ -168,6 +178,86 @@ def location_merger(
 
     logger.info(f"Merged dataframe contains {len(df_combined_turbines.index)} turbines.")
     save_dataframe(df_combined_turbines, output_file)
+
+
+def merge_dataframes_per_country(
+    df_file1: pd.DataFrame,
+    df_file2: pd.DataFrame,
+    tol: Optional[float] = None,
+    preferred_source_df: Optional[pd.DataFrame] = None,
+    merged_source_name: Optional[str] = None,
+    mix_strategy: Optional[MixStrategy | str] = MixStrategy.MultiMerge,
+) -> Tuple[List[Turbine], pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Merge wind turbine locations from different pandas.DataFrames per country."""
+    start_time = time.time()
+
+    if len(df_file1) > 0 and len(df_file2) > 0:
+        countries = list(
+            set(df_file1["country"].unique()) & set(df_file2["country"].unique())
+        )
+    else:
+        return merge_dataframes(
+            df_file1,
+            df_file2,
+            tol=tol,
+            preferred_source_df=preferred_source_df,
+            merged_source_name=merged_source_name,
+            mix_strategy=mix_strategy,
+        )
+
+    merged_turbines = []
+    file1_unique = []
+    file2_unique = []
+    file1_duplicate = []
+    file2_duplicate = []
+
+    logger.debug(f"Processing countries: {', '.join(countries)}")
+
+    for country in countries:
+        logger.info(f"Merging turbines in {country}")
+
+        # FIXME: make merge_dataframes work without .reset_index()
+        (
+            merged_turbines_country,
+            df_file1_unique_country,
+            df_file2_unique_country,
+            df_file1_duplicate_country,
+            df_file2_duplicate_country,
+        ) = merge_dataframes(
+            df_file1[df_file1["country"] == country].reset_index(),
+            df_file2[df_file2["country"] == country].reset_index(),
+            tol=tol,
+            preferred_source_df=preferred_source_df,
+            merged_source_name=merged_source_name,
+            mix_strategy=mix_strategy,
+        )
+
+        merged_turbines += merged_turbines_country
+        file1_unique += [df_file1_unique_country]
+        file2_unique += [df_file2_unique_country]
+        file1_duplicate += [df_file1_duplicate_country]
+        file2_duplicate += [df_file2_duplicate_country]
+
+    file1_unique += [df_file1[~df_file1["country"].isin(countries)]]
+    file2_unique += [df_file2[~df_file2["country"].isin(countries)]]
+
+    def concat_or_none(lst):
+        return None if all(x is None for x in lst) else pd.concat(lst)
+
+    df_file1_unique = concat_or_none(file1_unique)
+    df_file2_unique = concat_or_none(file2_unique)
+    df_file1_duplicate = concat_or_none(file1_duplicate)
+    df_file2_duplicate = concat_or_none(file2_duplicate)
+
+    logger.info(f"Merging datasets per country took {time.time() - start_time} seconds")
+
+    return (
+        merged_turbines,
+        df_file1_unique,
+        df_file2_unique,
+        df_file1_duplicate,
+        df_file2_duplicate,
+    )
 
 
 def merge_dataframes(

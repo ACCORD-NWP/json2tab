@@ -24,6 +24,9 @@ def read_locationdata_as_dataframe(
     input_filename: str,
     ext: Optional[str] = None,
     rename_rules: Optional[str | dict] = None,
+    write_rules: Optional[str | dict] = None,
+    filter_rules: Optional[str | dict] = None,
+    **kwargs,
 ) -> pd.DataFrame:
     """Reads dataframe with wind turbine location data from a file.
 
@@ -31,6 +34,9 @@ def read_locationdata_as_dataframe(
         input_filename (str):    Filename with wind turbine location data
         ext (str):               Extension used to determine reader, default: None(=auto)
         rename_rules (str|dict): Rename rules to rename columns in read data
+        write_rules (str|dict):  Write rules to (conditional) write columns in read data
+        filter_rules (str|dict): Filter rules to filter columns based on value
+        **kwargs:                Variable named arguments (i.e. sheet_name for Excel)
 
     Returns:
         pandas.DataFrame with wind turbine location data
@@ -41,6 +47,9 @@ def read_locationdata_as_dataframe(
 
     if ext.lower() in ["csv", ".csv"]:
         data = read_locationdata_from_csv_as_dataframe(input_filename)
+
+    elif ext.lower() in ["xls", ".xls", "xlsx", ".xlsx"]:
+        data = read_locationdata_from_excel_as_dataframe(input_filename, **kwargs)
 
     elif ext.lower() in ["json", ".json", "geojson", ".geojson"]:
         data = read_locationdata_from_geojson_as_dataframe(input_filename)
@@ -57,9 +66,92 @@ def read_locationdata_as_dataframe(
     else:
         data = None
 
-    # Apply rename rules (if applicable)
-    if data is not None:
+    data = apply_rename_rules(data, rename_rules)
+    data = apply_write_rules(data, write_rules)
+    data = apply_filter_rules(data, filter_rules)
+
+    return data
+
+
+def apply_rename_rules(
+    data: pd.DataFrame, rename_rules: Optional[str | dict] = None
+) -> pd.DataFrame:
+    """Applies rename rules to rename columns in data."""
+    if data is not None and rename_rules is not None:
         data = data.rename(columns=parse_rules(rename_rules))
+
+    return data
+
+
+def apply_write_rules(
+    data: pd.DataFrame, write_rules: Optional[str | dict] = None
+) -> pd.DataFrame:
+    """Applies write rules to conditional write columns based on value."""
+    # Apply rewrite rules (if applicable)
+    if data is not None and write_rules is not None:
+        for item_key, item_val in parse_rules(write_rules).items():
+            val_dict = item_val if isinstance(item_val, dict) else {None: item_val}
+            writeOnlyMissing = item_key[0] == "+"
+
+            key = item_key[1:] if writeOnlyMissing else item_key
+
+            for value1, value2 in val_dict.items():
+                if (
+                    isinstance(value2, tuple)
+                    and len(value2) == 2
+                    and value2[0] in data.columns
+                ):
+                    # Filtered write
+                    filter_key, filter_value = value2
+                    new_value = value1
+                else:
+                    # Translate
+                    filter_key = key
+                    filter_value = value1
+                    new_value = value2
+
+                write_method = (
+                    "write only missing data"
+                    if writeOnlyMissing
+                    else "overwrite written data"
+                )
+                if filter_value is not None:
+                    filter_cond = data[filter_key] == filter_value
+                    if writeOnlyMissing:
+                        filter_cond = (filter_cond) & pd.isna(data[key])
+
+                    data.loc[filter_cond, key] = new_value
+
+                    logger.info(
+                        f"Write data[{key}] = {new_value} "
+                        f"(where data[{filter_key}] = {filter_value}, {write_method})"
+                    )
+                else:
+                    if writeOnlyMissing:
+                        data.loc[pd.isna(data[key]), key] = new_value
+                    else:
+                        data[key] = new_value
+
+                    logger.info(f"Write data[{key}] = {new_value} ({write_method})")
+
+    return data
+
+
+def apply_filter_rules(
+    data: pd.DataFrame, filter_rules: Optional[str | dict] = None
+) -> pd.DataFrame:
+    """Applies filter rules to filter columns based on value."""
+    # Apply filter rules (if applicable)
+    if data is not None and filter_rules is not None:
+        for collumn, value in parse_rules(filter_rules).items():
+            if collumn in data:
+                data = data[data[collumn] == value]
+                logger.info(f"Filter data on {collumn}={value}.")
+            else:
+                logger.warning(
+                    f"Collumn {collumn} not present in data, "
+                    f"skip filtering on {collumn}={value}"
+                )
 
     return data
 
@@ -168,6 +260,39 @@ def read_locationdata_from_csv_as_dataframe(input_filename: str) -> pd.DataFrame
         return None
     except Exception as e:
         logger.exception(f"Error reading CSV file: {e}")
+        raise e
+
+
+def read_locationdata_from_excel_as_dataframe(
+    input_filename: str, **kwargs
+) -> pd.DataFrame:
+    """Reads dataframe with wind turbine location data from a Excel file.
+
+    Args:
+        input_filename (str): Filename with wind turbine location data
+        **kwargs:             Variable named arguments (i.e. sheet_name for Excel)
+
+    Returns:
+        pandas.DataFrame with wind turbine location data
+
+    Raises:
+        Exception: when reading data is failed
+    """
+    try:
+        logger.debug(
+            f"Read inputfile '{input_filename}' as Excel-file with args = {kwargs}"
+        )
+
+        data = pd.read_excel(input_filename, **kwargs)
+
+        if "source" not in data.columns:
+            _, data["source"] = os.path.split(input_filename)
+
+        logger.info(f"Loaded {len(data.index)} turbines from {input_filename}")
+        return data
+
+    except Exception as e:
+        logger.exception(f"Error reading Excel file: {e}")
         raise e
 
 
@@ -280,17 +405,26 @@ def parse_rules(rules: str | dict) -> dict:
 
     rule_list = rules.split(",")
     for rule in rule_list:
-        [key, val] = rule.split("=")
+        [key, val] = rule.split("=", 1)
         key = key.strip(syms)
         val = val.strip(syms)
 
         with contextlib.suppress(Exception):
-            translate_key = "#->"
-            if translate_key in val:
-                [old_value, new_value] = val.split(translate_key)
+            translate_sym = "#->"
+            filter_sym = "@("
+            if translate_sym in val:
+                [old_value, new_value] = val.split(translate_sym)
                 old_value = old_value.strip(syms)
                 new_value = new_value.strip(syms)
+
                 val = {old_value: new_value}
+            elif filter_sym in val and "=" in val and val[-1] == ")":
+                [new_value, filter_rule] = val[0:-1].split(filter_sym)
+                new_value = new_value.strip(syms)
+                filter_rule = filter_rule.strip(syms)
+
+                [filter_key, filter_value] = filter_rule.split("=")
+                val = {new_value: (filter_key, filter_value)}
 
         if key not in rule_dict:
             rule_dict[key] = val

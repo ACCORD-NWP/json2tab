@@ -31,8 +31,15 @@ def standarize_dataframe(data: pd.DataFrame, always: bool = False) -> pd.DataFra
         pandas.DataFrame with standarized turbine information
     """
     turbine_keys = set(Turbine().to_dict().keys())
+    data_keys = set(data.columns if data is not None else [])
+    missing_keys = turbine_keys - data_keys
 
-    if always or (data is not None and len(set(data.columns) - turbine_keys) > 0):
+    if len(missing_keys) > 0:
+        logger.debug(
+            f"Missing turbine keys for standarized form: {', '.join(missing_keys)}"
+        )
+
+    if always or (data is not None and len(missing_keys) > 0):
         # Convert data rows to interpret the rows as standarized Turbine
         logger.debug(
             f"Converting info for {len(data.index)} turbines to "
@@ -196,7 +203,7 @@ def merge_turbine_data(
 
     is_offshore, alternative_used = fetch_data(
         lambda source, default=None: get_value_from_dict(
-            ["is_offshore", "ondergrond", "Type of location", "Placering"],
+            ["is_offshore", "ondergrond", "Type of location", "Placering", "LZM"],
             source if isinstance(source, dict) else source.to_dict(),
             default=default,
         ),
@@ -380,6 +387,7 @@ def merge_turbine_data(
             "zee",
             "hav",
             "vatten",
+            "meer",
         ]:
             is_offshore = True
         elif isinstance(is_offshore, str) and is_offshore.lower() in ["land"]:

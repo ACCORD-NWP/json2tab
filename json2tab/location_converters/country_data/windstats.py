@@ -5,17 +5,19 @@ from typing import Optional
 
 import pandas as pd
 
-from ...io.readers import parse_rules
+from ...io.readers import read_locationdata_as_dataframe
 from ...io.writers import save_dataframe
-from ...logs import logger
 from ...turbine_utils import datarow_to_turbine
 
 
 def windstats(
     input_filename: str,
     output_filename: Optional[str] = None,
+    sheet_name: Optional[str] = None,
     label_source: Optional[str] = None,
     rename_rules: Optional[str | dict] = None,
+    write_rules: Optional[str | dict] = None,
+    filter_rules: Optional[str | dict] = None,
 ) -> pd.DataFrame:
     """Converter to generate windfarm location file from WindStats data."""
     if output_filename is None:
@@ -24,18 +26,17 @@ def windstats(
 
     print(f"WindStat Windfarm Converter ({input_filename} -> {output_filename})")
 
-    if label_source is None:
-        _, label_source = os.path.split(input_filename)
-    logger.info(f"Set source-field for {input_filename} to '{label_source}'")
-
-    data = pd.read_excel(input_filename)
+    data = read_locationdata_as_dataframe(
+        input_filename=input_filename,
+        rename_rules=rename_rules,
+        write_rules=write_rules,
+        filter_rules=filter_rules,
+        sheet_name=sheet_name,
+    )
 
     data.columns = data.columns.str.strip()
 
-    # Apply rename rules
-    data = data.rename(columns=parse_rules(rename_rules))
-
-    if "source" not in data:
+    if label_source is not None:
         data["source"] = label_source
 
     windfarms = []

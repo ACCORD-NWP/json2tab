@@ -1,3 +1,7 @@
+# TODO:
+# - Introduce France
+# - Phase out wf101 source
+
 INPUT_FOLDER:=../web_data
 OUTPUT_FOLDER:=output
 
@@ -22,7 +26,11 @@ COUNTRIES = germany france sweden united_kingdom netherlands denmark austria bel
 
 REMOVE_FROM_WF101 := Netherlands
 REMOVE_FROM_OSM := nothing
-EXCLUSIVE_COUNTRIES = Germany Austria Denmark Italy Bulgaria "United Kingdom"
+EXCLUSIVE_COUNTRIES = Austria Germany Greece "United Kingdom"
+# Rationale exclusive countries:
+# Austria: data provided by IGwindkraft seen as ground truth
+# Germany: data provided by MaStR seen as ground truth
+# Greece/"United Kingdom": generated country data already based on basemap turbines
 
 AUXILARY = osm wf101 osm+wf101 osm+wf101+emodnet basemap merge euromap
 
@@ -106,6 +114,9 @@ $(OUTPUT_FOLDER)/osm_$(OSM_REQ_DATE_STAMP_SUCCES).csv:
 
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/osm/osm.csv --type remove_country --country $(REMOVE_FROM_OSM)
 
+#	Mark all turbines without a country specified as country=Unknown
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/osm/osm.csv --type csv2csv --write-columns "+country=Unknown"
+
 	cp $(OUTPUT_FOLDER)/osm/osm.csv $(OUTPUT_FOLDER)/osm_$(OSM_REQ_DATE_STAMP_SUCCES).csv
 	ln -sf "$(PWD)/$(OUTPUT_FOLDER)/osm_$(OSM_REQ_DATE_STAMP_SUCCES).csv" "$(OUTPUT_FOLDER)/osm.csv"
 
@@ -137,6 +148,10 @@ $(OUTPUT_FOLDER)/osm+wf101.csv: $(OUTPUT_FOLDER)/osm.csv $(OUTPUT_FOLDER)/wf101.
 	cp $(OUTPUT_FOLDER)/osm+wf101/osm+wf101.csv $(OUTPUT_FOLDER)/osm+wf101.csv
 
 
+TODAY_YEAR:=$(shell date +%Y)
+YEAR_CONSTRUCTION:=$(shell expr $(TODAY_YEAR) + 2)
+YEAR_PLANNED:=$(shell expr $(TODAY_YEAR) + 5)
+YEAR_APPROVED:=$(shell expr $(TODAY_YEAR) + 10)
 
 EMODNET_TARGET:=osm+wf101
 $(OUTPUT_FOLDER)/basemap.csv: $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet.csv
@@ -146,7 +161,10 @@ $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet.csv: $(OUTPUT_FOLDER)/$(EMODNET_TARGE
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/$(EMODNET_TARGET).csv --type select_offshore --output $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)_offshore.csv
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/$(EMODNET_TARGET).csv --type select_onshore  --output $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)_onshore.csv
 
-	json2tab --debug=$(DEBUG_LEVEL) --map $(INPUT_FOLDER)/emodnet/emodnet_windfarms_polygon/windfarmspolyPolygon_flipped.shp $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)_offshore.csv --output $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)+emodnet_offshore.csv --rename-columns POWER_MW=installed_power_mw --map-mode=by_geometry --max-distance=0.01 --merge-mode=enrich_second --labels "EMODnet+$(EMODNET_TARGET)"
+	@echo "Set EMODnet windfarms with status=Construction and undefined start_date to year=$(YEAR_CONSTRUCTION)"
+	@echo "Set EMODnet windfarms with status=Planned and undefined start_date to year=$(YEAR_PLANNED)"
+	@echo "Set EMODnet windfarms with status=Approved and undefined start_date to year=$(YEAR_APPROVED)"
+	json2tab --debug=$(DEBUG_LEVEL) --map $(INPUT_FOLDER)/emodnet/emodnet_windfarms_polygon/windfarmspolyPolygon_flipped.shp $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)_offshore.csv --output $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)+emodnet_offshore.csv --write-columns-1 "+year=$(YEAR_CONSTRUCTION)@(status=Construction),+year=$(YEAR_PLANNED)@(status=Planned),+year=$(YEAR_APPROVED)@(status=Approved)" --rename-columns-1 power_mw=installed_power_mw --map-mode=by_geometry --max-distance=0.01 --merge-mode=enrich_second --labels "EMODnet (Production)+$(EMODNET_TARGET)"
 
 	json2tab --debug=$(DEBUG_LEVEL) --merge $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)+emodnet_offshore.csv $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)_onshore.csv --output $(OUTPUT_FOLDER)/$(EMODNET_TARGET)+emodnet/$(EMODNET_TARGET)+emodnet.csv
 
@@ -279,20 +297,20 @@ UK_REQ_STAMP_FANCY=$(shell echo "$(UK_REQ_STAMP)" | cut -c 1-4)Q$(shell echo "$(
 uk: united_kingdom
 united_kingdom: $(OUTPUT_FOLDER)/united_kingdom_$(UK_REQ_STAMP_FANCY).csv
 $(OUTPUT_FOLDER)/united_kingdom.csv : $(OUTPUT_FOLDER)/united_kingdom_$(UK_REQ_STAMP_FANCY).csv
-$(OUTPUT_FOLDER)/united_kingdom_$(UK_REQ_STAMP_FANCY).csv: $(OUTPUT_FOLDER)/osm.csv
+$(OUTPUT_FOLDER)/united_kingdom_$(UK_REQ_STAMP_FANCY).csv: $(OUTPUT_FOLDER)/basemap.csv
 	@echo "=== CONVERTING COUNTRY INPUT DATA FOR UNITED KINGDOM ==="
 	@mkdir -p $(OUTPUT_FOLDER)/united_kingdom
 	json2tab --debug=$(DEBUG_LEVEL) --convert "$(UK_REQ_FILE)" --type uk --output $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms.csv --labels "United Kingdom (REPD publication $(UK_REQ_STAMP_FANCY))"
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms.csv --type csv2csv --write-columns "country=United Kingdom"
 
 	@echo "=== BUILD UK, ENRICH WINDFARM DATA WITH OSM DATA ==="
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/osm.csv --type select_country --country "United Kingdom" --output $(OUTPUT_FOLDER)/united_kingdom/uk_osm.csv
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/basemap.csv --type select_country --country "United Kingdom" --output $(OUTPUT_FOLDER)/united_kingdom/uk_basemap.csv
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms.csv --type select_offshore --output $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms_offshore.csv
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms.csv --type select_onshore --output $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms_onshore.csv
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/united_kingdom/uk_osm.csv --type select_offshore --output $(OUTPUT_FOLDER)/united_kingdom/uk_osm_offshore.csv
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/united_kingdom/uk_osm.csv --type select_onshore --output $(OUTPUT_FOLDER)/united_kingdom/uk_osm_onshore.csv
-	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms_onshore.csv $(OUTPUT_FOLDER)/united_kingdom/uk_osm_onshore.csv --output $(OUTPUT_FOLDER)/united_kingdom/uk_onshore.csv --max-distance=0.01 --merge-mode=enrich_second
-	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms_offshore.csv $(OUTPUT_FOLDER)/united_kingdom/uk_osm_offshore.csv --output $(OUTPUT_FOLDER)/united_kingdom/uk_offshore.csv --max-distance=0.25 --merge-mode=enrich_first
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/united_kingdom/uk_basemap.csv --type select_offshore --output $(OUTPUT_FOLDER)/united_kingdom/uk_basemap_offshore.csv
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/united_kingdom/uk_basemap.csv --type select_onshore --output $(OUTPUT_FOLDER)/united_kingdom/uk_basemap_onshore.csv
+	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms_onshore.csv $(OUTPUT_FOLDER)/united_kingdom/uk_basemap_onshore.csv --output $(OUTPUT_FOLDER)/united_kingdom/uk_onshore.csv --max-distance=0.01 --merge-mode=enrich_second
+	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/united_kingdom/uk_windfarms_offshore.csv $(OUTPUT_FOLDER)/united_kingdom/uk_basemap_offshore.csv --output $(OUTPUT_FOLDER)/united_kingdom/uk_offshore.csv --max-distance=0.25 --merge-mode=enrich_second
 	json2tab --debug=$(DEBUG_LEVEL) --merge $(OUTPUT_FOLDER)/united_kingdom/uk_onshore.csv $(OUTPUT_FOLDER)/united_kingdom/uk_offshore.csv --output $(OUTPUT_FOLDER)/united_kingdom/uk_$(UK_REQ_STAMP_FANCY).csv
 
 	cp $(OUTPUT_FOLDER)/united_kingdom/uk_$(UK_REQ_STAMP_FANCY).csv $(OUTPUT_FOLDER)/united_kingdom_$(UK_REQ_STAMP_FANCY).csv
@@ -318,17 +336,15 @@ $(OUTPUT_FOLDER)/finland_$(FIN_DATA_STAMP).csv:
 # ITALY
 # ==============
 italy: $(OUTPUT_FOLDER)/italy.csv
-$(OUTPUT_FOLDER)/italy.csv: $(OUTPUT_FOLDER)/wf101.csv $(OUTPUT_FOLDER)/osm.csv
+$(OUTPUT_FOLDER)/italy.csv: $(OUTPUT_FOLDER)/basemap.csv
 	@echo "=== CONVERTING COUNTRY INPUT DATA FOR ITALY ==="
 	@mkdir -p $(OUTPUT_FOLDER)/italy
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(INPUT_FOLDER)/italy/Italian_Wind_Farms_db.xlsx --type italy --output $(OUTPUT_FOLDER)/italy/italy_windfarms.csv --labels "Italy (ItalianWindFarmsDB 20250513)"
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/italy/italy_windfarms.csv $(EEZ_FILE) $(COUNTRY_BORDER_FILE) --type fix_country_offshore
 
-	@echo "=== BUILD ITALY, ENRICH OSM+WF101 DATA WITH WINDFARM DATA ==="
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/osm.csv --type select_country --country Italy --output $(OUTPUT_FOLDER)/italy/italy_osm.csv
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/wf101.csv --type select_country --country Italy --output $(OUTPUT_FOLDER)/italy/italy_wf101.csv
-	json2tab --debug=$(DEBUG_LEVEL) --merge $(OUTPUT_FOLDER)/italy/italy_osm.csv $(OUTPUT_FOLDER)/italy/italy_wf101.csv --output $(OUTPUT_FOLDER)/italy/italy_osm+wf101.csv
-	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/italy/italy_windfarms.csv $(OUTPUT_FOLDER)/italy/italy_osm+wf101.csv --output $(OUTPUT_FOLDER)/italy/italy.csv
+	@echo "=== BUILD ITALY, ENRICH BASEMAP DATA WITH WINDFARM DATA ==="
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/basemap.csv --type select_country --country Italy --output $(OUTPUT_FOLDER)/italy/italy_basemap.csv
+	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/italy/italy_windfarms.csv $(OUTPUT_FOLDER)/italy/italy_basemap.csv --output $(OUTPUT_FOLDER)/italy/italy.csv
 	
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/italy/italy.csv --type select_country --country Italy
 
@@ -339,15 +355,15 @@ $(OUTPUT_FOLDER)/italy.csv: $(OUTPUT_FOLDER)/wf101.csv $(OUTPUT_FOLDER)/osm.csv
 # BULGARIA
 # ==============
 bulgaria: $(OUTPUT_FOLDER)/bulgaria.csv
-$(OUTPUT_FOLDER)/bulgaria.csv: $(OUTPUT_FOLDER)/osm.csv
+$(OUTPUT_FOLDER)/bulgaria.csv: $(OUTPUT_FOLDER)/basemap.csv
 	@echo "=== CONVERTING COUNTRY INPUT DATA FOR BULGARIA ==="
 	@mkdir -p $(OUTPUT_FOLDER)/bulgaria
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(INPUT_FOLDER)/bulgaria/bulgarian_wind_farms_combined.csv --type csv2csv --output $(OUTPUT_FOLDER)/bulgaria/bulgarian_windfarms.csv --rename-columns power_kw=installed_power
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(INPUT_FOLDER)/bulgaria/bulgarian_wind_farms_combined.csv --type csv2csv --output $(OUTPUT_FOLDER)/bulgaria/bulgarian_windfarms.csv --rename-columns power_kw=installed_power --write-columns source="Bulgarian windfarms"
 	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/bulgaria/bulgarian_windfarms.csv $(EEZ_FILE) $(COUNTRY_BORDER_FILE) --type fix_country_offshore
 
-	@echo "=== BUILD BULGARIA, ENRICH OSM DATA WITH WINDFARM DATA ==="
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/osm.csv --type select_country --country Bulgaria --output $(OUTPUT_FOLDER)/bulgaria/bulgaria_osm.csv
-	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/bulgaria/bulgarian_windfarms.csv $(OUTPUT_FOLDER)/bulgaria/bulgaria_osm.csv --output $(OUTPUT_FOLDER)/bulgaria/bulgaria.csv
+	@echo "=== BUILD BULGARIA, ENRICH BASEMAP DATA WITH WINDFARM DATA ==="
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/basemap.csv --type select_country --country Bulgaria --output $(OUTPUT_FOLDER)/bulgaria/bulgaria_basemap.csv
+	json2tab --debug=$(DEBUG_LEVEL) --map $(OUTPUT_FOLDER)/bulgaria/bulgarian_windfarms.csv $(OUTPUT_FOLDER)/bulgaria/bulgaria_basemap.csv --output $(OUTPUT_FOLDER)/bulgaria/bulgaria.csv
 
 	cp $(OUTPUT_FOLDER)/bulgaria/bulgaria.csv $(OUTPUT_FOLDER)/bulgaria.csv
 
@@ -358,11 +374,11 @@ $(OUTPUT_FOLDER)/bulgaria.csv: $(OUTPUT_FOLDER)/osm.csv
 GR_REQ_STAMP:=$(shell ls -v $(INPUT_FOLDER)/greece/features_*.geojson | tail -1 | sed -e s/[^0-9]//g)
 greece: $(OUTPUT_FOLDER)/greece_$(GR_REQ_STAMP).csv
 $(OUTPUT_FOLDER)/greece.csv: $(OUTPUT_FOLDER)/greece_$(GR_REQ_STAMP).csv
-$(OUTPUT_FOLDER)/greece_$(GR_REQ_STAMP).csv: $(OUTPUT_FOLDER)/osm.csv
+$(OUTPUT_FOLDER)/greece_$(GR_REQ_STAMP).csv: $(OUTPUT_FOLDER)/basemap.csv
 	@echo "=== CONVERTING COUNTRY INPUT DATA FOR GREECE ==="
 	@mkdir -p $(OUTPUT_FOLDER)/greece
-	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/osm.csv --type select_country --country "Greece" --output $(OUTPUT_FOLDER)/greece/greece_osm.csv
-	json2tab --debug=$(DEBUG_LEVEL) --convert "$(INPUT_FOLDER)/greece/features_$(GR_REQ_STAMP).geojson" $(OUTPUT_FOLDER)/greece/greece_osm.csv --type greece --output $(OUTPUT_FOLDER)/greece/greece_$(GR_REQ_STAMP).csv --labels "Greece (Eletaen $(GR_REQ_STAMP))"
+	json2tab --debug=$(DEBUG_LEVEL) --convert $(OUTPUT_FOLDER)/basemap.csv --type select_country --country "Greece" --output $(OUTPUT_FOLDER)/greece/greece_basemap.csv
+	json2tab --debug=$(DEBUG_LEVEL) --convert "$(INPUT_FOLDER)/greece/features_$(GR_REQ_STAMP).geojson" $(OUTPUT_FOLDER)/greece/greece_basemap.csv --type greece --output $(OUTPUT_FOLDER)/greece/greece_$(GR_REQ_STAMP).csv --labels "Greece (Eletaen $(GR_REQ_STAMP))"
 
 	cp $(OUTPUT_FOLDER)/greece/greece_$(GR_REQ_STAMP).csv $(OUTPUT_FOLDER)/greece_$(GR_REQ_STAMP).csv
 	ln -sf "$(PWD)/$(OUTPUT_FOLDER)/greece/greece_$(GR_REQ_STAMP).csv" "$(OUTPUT_FOLDER)/greece.csv"
@@ -395,40 +411,40 @@ $(OUTPUT_FOLDER)/euromap.csv: $(OUTPUT_FOLDER)/basemap.csv $(OUTPUT_FOLDER)/coun
 # ==============
 # MERGING
 # ==============
-C1:=netherlands
-C2:=belgium
-S1:=$(C1)+$(C2)
-$(OUTPUT_FOLDER)/merge/$(S1).csv: $(OUTPUT_FOLDER)/$(C1).csv $(OUTPUT_FOLDER)/$(C2).csv
+C11:=netherlands
+C12:=belgium
+S1:=$(C11)+$(C12)
+$(OUTPUT_FOLDER)/merge/$(S1).csv: $(OUTPUT_FOLDER)/$(C11).csv $(OUTPUT_FOLDER)/$(C12).csv
 	json2tab --debug=$(DEBUG_LEVEL) --merge $^ --output $@
 
-C1:=germany
-C2:=austria
-S2:=$(C1)+$(C2)
-$(OUTPUT_FOLDER)/merge/$(S2).csv: $(OUTPUT_FOLDER)/$(C1).csv $(OUTPUT_FOLDER)/$(C2).csv
+C21:=germany
+C22:=austria
+S2:=$(C21)+$(C22)
+$(OUTPUT_FOLDER)/merge/$(S2).csv: $(OUTPUT_FOLDER)/$(C21).csv $(OUTPUT_FOLDER)/$(C22).csv
 	json2tab --debug=$(DEBUG_LEVEL) --merge $^ --output $@
 
-C1:=denmark
-C2:=united_kingdom
-S3:=$(C1)+$(C2)
-$(OUTPUT_FOLDER)/merge/$(S3).csv: $(OUTPUT_FOLDER)/$(C1).csv $(OUTPUT_FOLDER)/$(C2).csv
+C31:=denmark
+C32:=united_kingdom
+S3:=$(C31)+$(C32)
+$(OUTPUT_FOLDER)/merge/$(S3).csv: $(OUTPUT_FOLDER)/$(C31).csv $(OUTPUT_FOLDER)/$(C32).csv
 	json2tab --debug=$(DEBUG_LEVEL) --merge $^ --output $@
 
-C1:=sweden
-C2:=finland
-S4:=$(C1)+$(C2)
-$(OUTPUT_FOLDER)/merge/$(S4).csv: $(OUTPUT_FOLDER)/$(C1).csv $(OUTPUT_FOLDER)/$(C2).csv
+C41:=sweden
+C42:=finland
+S4:=$(C41)+$(C42)
+$(OUTPUT_FOLDER)/merge/$(S4).csv: $(OUTPUT_FOLDER)/$(C41).csv $(OUTPUT_FOLDER)/$(C42).csv
 	json2tab --debug=$(DEBUG_LEVEL) --merge $^ --output $@
 
-C1:=italy
-C2:=greece
-S5:=$(C1)+$(C2)
-$(OUTPUT_FOLDER)/merge/$(S5).csv: $(OUTPUT_FOLDER)/$(C1).csv $(OUTPUT_FOLDER)/$(C2).csv
+C51:=italy
+C52:=greece
+S5:=$(C51)+$(C52)
+$(OUTPUT_FOLDER)/merge/$(S5).csv: $(OUTPUT_FOLDER)/$(C51).csv $(OUTPUT_FOLDER)/$(C52).csv
 	json2tab --debug=$(DEBUG_LEVEL) --merge $^ --output $@
 
-C1:=france
-C2:=bulgaria
-S6:=$(C1)+$(C2)
-$(OUTPUT_FOLDER)/merge/$(S6).csv: $(OUTPUT_FOLDER)/$(C1).csv $(OUTPUT_FOLDER)/$(C2).csv
+C61:=france
+C62:=bulgaria
+S6:=$(C61)+$(C62)
+$(OUTPUT_FOLDER)/merge/$(S6).csv: $(OUTPUT_FOLDER)/$(C61).csv $(OUTPUT_FOLDER)/$(C62).csv
 	json2tab --debug=$(DEBUG_LEVEL) --merge $^ --output $@
 
 T1:=$(S1)+$(S2)

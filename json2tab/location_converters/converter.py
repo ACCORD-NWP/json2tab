@@ -87,10 +87,12 @@ def converter(
     output_filename: Optional[str] = None,
     country: Optional[str | List[str]] = None,
     rename_rules: Optional[str | dict] = None,
-    write_columns: Optional[str | dict] = None,
+    write_rules: Optional[str | dict] = None,
+    filter_rules: Optional[str | dict] = None,
     min_distance: Optional[float] = None,
     label: Optional[str] = None,
     overpass_url: Optional[str] = None,
+    sheet_name: Optional[str] = None,
 ):
     """Entry point for different converters.
 
@@ -102,10 +104,12 @@ def converter(
         country (str | list[str]):         Country or list of countries as used in
                                            `select_country` and `remove_country`
         rename_rules (str | dict):         Rename rules to rename columns in input
-        write_columns (str | dict):        Inject rules to write columns in output
+        write_rules (str | dict):          Inject rules to write columns in output
+        filter_rules (str | dict):         Filter rules to filter columns based on value
         min_distance (float):              Min distance for remove_short_distance
         label (str):                       Label as written as source
         overpass_url (str):                Url used for the overpass API call
+        sheet_name (str):                  Name of sheet to load data
     """
     # Process first multi-input file converters
     if convert_type in ["fix_country_offshore", "fix_country_is_offshore"]:
@@ -206,7 +210,8 @@ def converter(
                     input_filename,
                     output_filename,
                     rename_rules=rename_rules,
-                    write_columns=write_columns,
+                    write_rules=write_rules,
+                    filter_rules=filter_rules,
                 )
 
             elif convert_type in ["twp", "thewindpower", "thewindpower.net"]:
@@ -214,6 +219,7 @@ def converter(
                     input_filename,
                     output_filename,
                     rename_rules=rename_rules,
+                    write_rules=write_rules,
                     label_source=label,
                 )
 
@@ -221,8 +227,11 @@ def converter(
                 windstats(
                     input_filename,
                     output_filename,
-                    rename_rules=rename_rules,
+                    sheet_name=sheet_name,
                     label_source=label,
+                    rename_rules=rename_rules,
+                    write_rules=write_rules,
+                    filter_rules=filter_rules,
                 )
 
             elif convert_type == "austria":

@@ -570,3 +570,19 @@ def get_radius_diameter_height(turbine_specs, type_specs) -> Tuple[float, float,
         height = get_height(type_specs)
 
     return radius, diameter, height
+
+
+def file_with_link_info(file: Path | str) -> str:
+    """Returns filename including linked target when file is a link."""
+    if not isinstance(file, Path):
+        file = Path(file)
+
+    if file.is_symlink():
+        target = file.readlink()
+
+        try:
+            return f"{file!s} -> {target.relative_to(Path('.').absolute())!s}"
+        except ValueError:
+            return f"{file!s} -> {target!s}"
+
+    return str(file)

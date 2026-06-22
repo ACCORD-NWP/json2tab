@@ -40,6 +40,7 @@ class TurbineMatcher:
         turbine_type_manager: TurbineTypeManager,
         model_designation_key: Optional[str] = None,
         matched_line_index_key: Optional[str] = None,
+        used_matcher_key: Optional[str] = "MatchedBy",
     ):
         """Initialize turbine matcher.
 
@@ -49,6 +50,7 @@ class TurbineMatcher:
             turbine_type_manager:         The manager that holds the turbine types
             model_designation_key (str):  (Optional) column name for model_designation
             matched_line_index_key (str): (Optional) column name for matched_line_index
+            used_matcher_key (str):       (Optional) column name for name of used matcher
         """
         self.turbine_location_manager = turbine_location_manager
         self.turbine_type_manager = turbine_type_manager
@@ -62,7 +64,7 @@ class TurbineMatcher:
         self.match_generated = None
         self.model_designation_key = model_designation_key
         self.matched_line_index_key = matched_line_index_key
-        self.used_matcher_key = "MatchedBy"
+        self.used_matcher_key = used_matcher_key
 
         self.match_cache = {}
 
@@ -94,6 +96,13 @@ class TurbineMatcher:
             self.use_default_selector = config["matcher"]["use_default_selector"]
         except (KeyError, ValueError, TypeError):
             self.use_default_selector = True
+
+        try:
+            self.raise_no_turbine_matched_warning = config["warnings"][
+                "no_turbine_matched"
+            ]
+        except (KeyError, ValueError, TypeError):
+            self.raise_no_turbine_matched_warning = True
 
     def _turbine_type_to_model_designation(
         self, turbine_type: str, rated_power: Optional[float] = None
@@ -716,7 +725,10 @@ class TurbineMatcher:
                     return model_designation, matched_line_index, "DefaultTurbineSelector"
 
         # Final option: discard this turbine
-        logger.warning(f"Cannot find turbine type for turbine at {tag_str} with {props}.")
+        if self.raise_no_turbine_matched_warning:
+            logger.warning(
+                f"Cannot find turbine type for turbine at {tag_str} with {props}."
+            )
 
         if turbine_type is not None:
             logger.warning(

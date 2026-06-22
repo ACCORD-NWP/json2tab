@@ -21,7 +21,7 @@ subsetting:
   # Filter turbines in temporal domain with installation/decommissioning date; possible values: a valid date, "today" (default) or "all"
   situation_date: "today"
 
-  # Method can be either "bbox" (bounding box) or "domain" (TOML-based domain)
+  # Method can be either "bbox" (bounding box), "domain" (TOML-based domain) or "country" (based on country field)
   method: "bbox"
   
   # Bounding box configuration (used if method: "bbox")
@@ -61,6 +61,7 @@ subsetting:
 
 # Turbine matcher configuration
 matcher:
+  use_cache: true
   use_probabilistic_mapper: false
   use_default_selector: false
   forbidden_types: "999;9999" #"999" # List of forbidden tubine types, i.e. turbine types that should be treated as unknown turbine types and matching logic should be applied to find correct turbine type
@@ -100,6 +101,11 @@ output:
       windspeed_range: "cut-in:0.5:cut-out#>100" # (Optional) range for subset selection of windspeeds in format start:[step:]stop[#>len] to write to output, start \in [cut-in, Integers], stop \in [cut-out, Integers]
       extend_to_35ms: false # (Optional) flag to extend all windspeed tables to 35 m/s
       bypass_cutout: false # (Optional) flag to bypass cut-out windspeed in output table (i.e. it will generate cp and powers for windspeeds > cut-out-speed)
+
+# Warning settings
+warnings:
+  no_turbine_matched: false
+  line_is_removed: false
 
 # Visualization settings
 visualization:

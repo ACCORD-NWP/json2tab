@@ -40,6 +40,27 @@ class TurbineLocationManager:
         self.turbines = None
         self.location_files = []
 
+    def contains_key(self, key: str, check_for_nans: bool = False):
+        """Checks if key is present in location data.
+
+        Args:
+            key: The key to check in turbine location data
+            check_for_nans: check if all values for key are valid
+
+        Returns:
+            True if key is present in turbine location data
+
+        """
+        if self.turbines is None:
+            return False
+
+        key_present = key in self.turbines
+        key_contains_nan = (
+            self.turbines[key].isna().any() if key_present and check_for_nans else False
+        )
+
+        return key_present and not key_contains_nan
+
     def load_turbines(self, location_data_file: Path | List[Path] | str | List[str]):
         """Load turbine location data from file(s).
 

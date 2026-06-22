@@ -11,6 +11,7 @@ def build_query(
     windturbine: bool = True,
     windfarm: bool = False,
     area_limit: Optional[List[float] | str] = None,
+    timeout: Optional[int] = 1000,
     requested_date: Optional[datetime | date | str] = None,
 ) -> str:
     """Returns the overpass query to request data from OSM."""
@@ -43,8 +44,11 @@ def build_query(
     if requested_date != "":
         requested_date = f'[date:"{requested_date}"]'
 
+    # Processing timeout
+    timeout = f"[timeout:{timeout}]" if timeout is not None and timeout > 0 else ""
+
     # Header
-    query = f"[out:json]{requested_date};"
+    query = f"[out:json]{timeout}{requested_date};"
 
     if windturbine and windfarm:
         query += "\n("

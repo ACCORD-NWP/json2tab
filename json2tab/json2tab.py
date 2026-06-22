@@ -144,7 +144,8 @@ def main(config: Dict[str, Any]):
         location_manager.fix_country_offshore(eez_file, land_file)
 
     # Apply cropping to subdomain
-    location_manager.filter_turbines(TurbineGeoFilterer(config["subsetting"]))
+    geo_filter = TurbineGeoFilterer(config["subsetting"])
+    location_manager.filter_turbines(geo_filter)
 
     # Apply selecting turbines respecting installation date
     location_manager.filter_turbines(TurbineTimeFilterer(config["subsetting"]))
@@ -156,48 +157,74 @@ def main(config: Dict[str, Any]):
     # Setup turbine matcher
     model_designation_key = "model_designation"
     type_index_key = "type_index"
-    turbine_matcher = TurbineMatcher(
-        config,
-        location_manager,
-        type_manager,
-        model_designation_key=model_designation_key,
-    )
+    used_matcher_key = "MatchedBy"
 
-    # Perform the actual match between turbine locations and turbine types
-    matched_turbines = turbine_matcher.match()
+    reuse_matching = location_manager.contains_key(
+        used_matcher_key, check_for_nans=True
+    ) and location_manager.contains_key(type_index_key, check_for_nans=True)
 
-    # Apply a type_index generator to get integer-valued types
-    type_index_generator = AutoIncrementTypeIndexGenerator(
-        matched_line_index_key=turbine_matcher.matched_line_index_key,
-        type_idx_key=type_index_key,
-    )
-    matched_turbines = type_index_generator.apply(matched_turbines)
-    matched_turbines = matched_turbines.drop(
-        columns=[turbine_matcher.matched_line_index_key], axis=1
-    )
+    if reuse_matching:
+        # Reuse matching as stored in input file
+        turbine_matcher = TurbineMatcher(
+            config,
+            location_manager,
+            None,
+            model_designation_key=model_designation_key,
+            used_matcher_key=used_matcher_key,
+        )
+
+        turbine_matcher.match_generated = "[reused matching]"
+        matched_turbines = location_manager.turbines
+
+    else:
+        turbine_matcher = TurbineMatcher(
+            config,
+            location_manager,
+            type_manager,
+            model_designation_key=model_designation_key,
+            used_matcher_key=used_matcher_key,
+        )
+
+        # Perform the actual match between turbine locations and turbine types
+        matched_turbines = turbine_matcher.match()
+
+        # Apply a type_index generator to get integer-valued types
+        type_index_generator = AutoIncrementTypeIndexGenerator(
+            matched_line_index_key=turbine_matcher.matched_line_index_key,
+            type_idx_key=type_index_key,
+        )
+        matched_turbines = type_index_generator.apply(matched_turbines)
+        matched_turbines = matched_turbines.drop(
+            columns=[turbine_matcher.matched_line_index_key], axis=1
+        )
 
     # Initialize location tab-file writer and write location tab-file
     location_tab_writer = TurbineLocationTabFileWriter(config, turbine_matcher)
-    location_tab_writer.write(matched_turbines, type_idx_key=type_index_key)
+    location_tab_writer.write(
+        matched_turbines,
+        type_idx_key=type_index_key,
+        subsetting_handler=geo_filter.subsetting_handler,
+    )
 
     # Save enhanced filtered location data before processing tab files
     output_filtered_data = output_dir / config["output"]["files"]["filtered_geojson"]
     save_dataframe(matched_turbines, output_filtered_data)
 
-    # Remove all old tab-files
-    type_tab_prefix = config["output"]["files"]["type_tab_prefix"]
-    tab_file_pattern = str(output_dir / f"{type_tab_prefix}*.tab")
+    if not reuse_matching:
+        # Remove all old tab-files
+        type_tab_prefix = config["output"]["files"]["type_tab_prefix"]
+        tab_file_pattern = str(output_dir / f"{type_tab_prefix}*.tab")
 
-    logger.info(f"Remove all tab-files with pattern: '{tab_file_pattern}'")
-    for file in glob.glob(tab_file_pattern):
-        os.remove(file)
+        logger.info(f"Remove all tab-files with pattern: '{tab_file_pattern}'")
+        for file in glob.glob(tab_file_pattern):
+            os.remove(file)
 
-    # Process all turbine types and create the tab files
-    logger.info("Generating new turbine type tab files")
-    type_tab_writer = TurbineTypeTabFileWriter(
-        config, turbine_matcher, type_index_generator
-    )
-    type_tab_writer.write(matched_turbines, output_dir, type_tab_prefix)
+        # Process all turbine types and create the tab files
+        logger.info("Generating new turbine type tab files")
+        type_tab_writer = TurbineTypeTabFileWriter(
+            config, turbine_matcher, type_index_generator
+        )
+        type_tab_writer.write(matched_turbines, output_dir, type_tab_prefix)
 
     location_tab_writer.write_installed_capacity_table(matched_turbines)
 

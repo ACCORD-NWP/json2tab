@@ -42,6 +42,19 @@ except ImportError:
 basedir = os.path.dirname(__file__)
 
 
+def get_alternatives_from_args(name: str, args):
+    """Gets args.name_1 and args.name_2 or args.name from args."""
+    if hasattr(args, f"{name}_1") and hasattr(args, f"{name}_2"):
+        val = (getattr(args, f"{name}_1"), getattr(args, f"{name}_2"))
+    else:
+        val = None
+
+    if val == (None, None) and hasattr(args, name):
+        val = getattr(args, name)
+
+    return val
+
+
 def main(argv=None):
     """Program's main routine."""
     prog = "json2tab"
@@ -233,10 +246,10 @@ def main(argv=None):
         )
 
         parser.add_argument(
-            "--write-columns",
-            metavar="write rule",
+            "--sheet-name",
+            metavar="name",
             type=str,
-            help="Rules to write columns from input data before processing",
+            help="Name of sheet to load data from",
             default=None,
         )
 
@@ -255,6 +268,70 @@ def main(argv=None):
             metavar="rename rule",
             type=str,
             help="Rules to rename columns from input data before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--rename-columns-1",
+            metavar="rename rule",
+            type=str,
+            help="Rules to rename columns from first input data before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--rename-columns-2",
+            metavar="rename rule",
+            type=str,
+            help="Rules to rename columns from second input data before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--write-columns",
+            metavar="write rule",
+            type=str,
+            help="Rules to write columns from input data before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--write-columns-1",
+            metavar="write rule",
+            type=str,
+            help="Rules to write columns from first input data before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--write-columns-2",
+            metavar="write rule",
+            type=str,
+            help="Rules to write columns from second input data before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--filter-columns",
+            metavar="filter rule",
+            type=str,
+            help="Rules to filter columns from data before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--filter-columns-1",
+            metavar="filter rule",
+            type=str,
+            help="Rules to filter columns from data of first file before processing",
+            default=None,
+        )
+
+        parser.add_argument(
+            "--filter-columns-2",
+            metavar="filter rule",
+            type=str,
+            help="Rules to filter columns from data of second file before processing",
             default=None,
         )
 
@@ -323,6 +400,11 @@ def main(argv=None):
     logger.debug(f"Parsed arguments: {args}")
     logger.debug(f"Application started at {datetime.datetime.now()}")
 
+    # Construct the rename rules
+    rename_rules = get_alternatives_from_args("rename_columns", args)
+    filter_rules = get_alternatives_from_args("filter_columns", args)
+    write_rules = get_alternatives_from_args("write_columns", args)
+
     if hasattr(args, "inverse") and args.inverse:
         database_file = args.output or "turbine_database+knmi.json"
         print(
@@ -375,7 +457,9 @@ def main(argv=None):
                 source_label=args.labels[0]
                 if args.labels and len(args.labels) > 0
                 else None,
-                rename_rules=args.rename_columns,
+                rename_rules=rename_rules,
+                filter_rules=filter_rules,
+                write_rules=write_rules,
                 max_distance=args.max_distance,
             )
         else:
@@ -406,11 +490,13 @@ def main(argv=None):
                 input_filenames=args.convert,
                 output_filename=args.output,
                 country=args.country,
-                rename_rules=args.rename_columns,
-                write_columns=args.write_columns,
+                rename_rules=rename_rules,
+                write_rules=write_rules,
+                filter_rules=filter_rules,
                 min_distance=args.min_distance,
                 label=args.labels[0] if args.labels is not None else None,
                 overpass_url=args.overpass_url,
+                sheet_name=args.sheet_name,
             )
         else:
             logger.warning("Loading converter failed; please install optional packages.")
