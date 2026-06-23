@@ -234,7 +234,9 @@ class TurbineLocationTabFileWriter:
 
             logger.info("Finished writing turbine location tab file.")
 
-    def write_installed_capacity_table(self, matched_turbines: pd.DataFrame):
+    def write_installed_capacity_table(
+        self, matched_turbines: pd.DataFrame, filename: str
+    ):
         """Write table with installed capacity for each country."""
         output_dir = Path(self.config["output"]["directory"])
 
@@ -308,7 +310,6 @@ class TurbineLocationTabFileWriter:
 
         table = None
         with contextlib.suppress(Exception):
-            filename = self.config["output"]["files"].get("installed_capacity")
             table = write_statistics(stats, output_dir, filename)
 
         header_str = "Installed capacity summary: \n\n"

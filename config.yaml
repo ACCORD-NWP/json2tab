@@ -82,8 +82,9 @@ output:
     # Output file to write model designation statistics
     model_designation_statistics: "model_designation_statistics.[csv,txt]"
     # Filtered GeoJSON with selected turbines
-    filtered_geojson: "filtered_turbines.[geojson,csv]"
+    filtered_turbines: "filtered_turbines.[geojson,csv]"
     # Visualization output
+    turbine_map: "turbine_map.png"
     regional_plot: "turbine_locations_regional.png"
     domain_plot: "turbine_locations_domain.png"
     # Tab file outputs

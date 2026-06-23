@@ -38,6 +38,7 @@ class TurbineLocationManager:
     def reset_turbines(self):
         """Reset turbine location data."""
         self.turbines = None
+        self.input_dir = None
         self.location_files = []
 
     def contains_key(self, key: str, check_for_nans: bool = False):
@@ -86,6 +87,10 @@ class TurbineLocationManager:
                 self.location_files.append(location_file)
 
                 df_file = read_locationdata_as_dataframe(location_file)
+
+                if self.input_dir is None:
+                    self.input_dir = location_file.parent
+
                 if df_file is not None:
                     df_file = standarize_dataframe(df_file)
                     self.turbines = pd.concat([self.turbines, df_file])

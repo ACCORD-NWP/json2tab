@@ -1,12 +1,15 @@
 """JSON-2-TAB main function-call entry point."""
 
+import contextlib
 import glob
 import os
+import shutil
 import traceback
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import pandas as pd
 import yaml
 
 from .AutoIncrementTypeIndexGenerator import AutoIncrementTypeIndexGenerator
@@ -26,6 +29,38 @@ except ImportError:
     # Loading optional package SimpleVisualizer failed
     # (probably due to missing the optional packages matplotlib and/or cartopy)
     SimpleVisualizer = None
+
+
+def process_macros(filename: str, config, geo_filter=None) -> str:
+    """Applies macros to input string."""
+    output = filename
+
+    with contextlib.suppress(Exception):
+        if geo_filter is not None and geo_filter.subsetting_handler is not None:
+            domain_name = geo_filter.subsetting_handler.display_name()
+            if domain_name.startswith("domain"):
+                domain_name = domain_name.removeprefix("domain")
+            domain_name = "".join(x for x in domain_name if x.isalnum() or x in "._- ")
+            domain_name = domain_name.strip()
+        else:
+            domain_name = ""
+
+        simulation_date = config["subsetting"]["situation_date"]
+
+        output = output.replace("@DOMAIN@", domain_name)
+        output = output.replace("@SITUATION_DATE@", simulation_date)
+
+        val_yyyy = simulation_date
+
+        if isinstance(simulation_date, date):
+            val_yyyy = str(simulation_date.year)
+        else:
+            with contextlib.suppress(Exception):
+                val_yyyy = str(pd.to_datetime(simulation_date).date().year)
+
+        output = output.replace("@YYYY@", val_yyyy)
+
+    return output
 
 
 def json2tab(
@@ -199,24 +234,39 @@ def main(config: Dict[str, Any]):
         )
 
     # Initialize location tab-file writer and write location tab-file
+    location_tab_file = process_macros(
+        config["output"]["files"]["location_tab"], config, geo_filter
+    )
     location_tab_writer = TurbineLocationTabFileWriter(config, turbine_matcher)
     location_tab_writer.write(
         matched_turbines,
-        type_idx_key=type_index_key,
         subsetting_handler=geo_filter.subsetting_handler,
+        output_name=location_tab_file,
+        type_idx_key=type_index_key,
     )
 
     # Save enhanced filtered location data before processing tab files
-    output_filtered_data = output_dir / config["output"]["files"]["filtered_geojson"]
+    filtered_turbines = config["output"]["files"].get("filtered_turbines")
+    if not filtered_turbines:
+        filtered_turbines = config["output"]["files"].get("filtered_geojson")
+        if filtered_turbines:
+            logger.warning(
+                "Depricated config output.files.filtered_geojson used;"
+                "please rename entry in config file to "
+                "output.files.filtered_turbines"
+            )
+
+    output_filtered_data = output_dir / process_macros(
+        filtered_turbines, config, geo_filter
+    )
     save_dataframe(matched_turbines, output_filtered_data)
 
+    type_tab_prefix = config["output"]["files"]["type_tab_prefix"]
+    output_tab_file_pattern = str(output_dir / f"{type_tab_prefix}*.tab")
     if not reuse_matching:
         # Remove all old tab-files
-        type_tab_prefix = config["output"]["files"]["type_tab_prefix"]
-        tab_file_pattern = str(output_dir / f"{type_tab_prefix}*.tab")
-
-        logger.info(f"Remove all tab-files with pattern: '{tab_file_pattern}'")
-        for file in glob.glob(tab_file_pattern):
+        logger.info(f"Remove all tab-files with pattern: '{output_tab_file_pattern}'")
+        for file in glob.glob(output_tab_file_pattern):
             os.remove(file)
 
         # Process all turbine types and create the tab files
@@ -225,13 +275,32 @@ def main(config: Dict[str, Any]):
             config, turbine_matcher, type_index_generator
         )
         type_tab_writer.write(matched_turbines, output_dir, type_tab_prefix)
+    elif location_manager.input_dir != output_dir:
+        logger.info(f"Remove all tab-files with pattern: '{output_tab_file_pattern}'")
+        for file in glob.glob(output_tab_file_pattern):
+            os.remove(file)
 
-    location_tab_writer.write_installed_capacity_table(matched_turbines)
+        input_tab_file_pattern = str(
+            location_manager.input_dir / f"{type_tab_prefix}*.tab"
+        )
+        # Copy tab-files to output direcotry
+        logger.info(
+            f"Copy all tab-files with pattern: "
+            f"'{input_tab_file_pattern}' to {output_dir!s}"
+        )
+
+        for file in glob.glob(input_tab_file_pattern):
+            shutil.copyfile(file, output_dir / Path(file).name)
+
+    ic_file = config["output"]["files"].get("installed_capacity")
+    ic_file = process_macros(ic_file, config, geo_filter)
+    location_tab_writer.write_installed_capacity_table(matched_turbines, ic_file)
 
     if SimpleVisualizer is not None:
         # Create visualization using simplified visualizer
         visualizer = SimpleVisualizer(config)
-        map_output = output_dir / "turbine_map.png"
+        map_file = config["output"]["files"].get("turbine_map", "turbine_map.png")
+        map_output = output_dir / process_macros(map_file, config, geo_filter)
         visualizer.create_map_plot(matched_turbines, map_output)
         print(f"Created map visualization: {map_output}")
 
