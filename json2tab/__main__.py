@@ -7,7 +7,7 @@ import importlib.metadata
 import os
 import time
 
-from .json2tab import json2tab
+from .json2tab import json2tab, load_config_from_file
 
 try:
     from .location_converters.converter import converter, supported_conversion_types
@@ -29,6 +29,12 @@ try:
     from .location_converters.TurbineWindfarmMapper import TurbineWindfarmMapper
 except ImportError:
     TurbineWindfarmMapper = None
+
+try:
+    from .SimpleVisualizer import SimpleVisualizer
+except ImportError:
+    SimpleVisualizer = None
+
 
 from .logs import logger
 from .tools.KnmiTurbineDatabaseWriter import knmi_turbine_database_writer
@@ -187,6 +193,14 @@ def main(argv=None):
             type=str,
             help="Url for Overpass API calls",
             default=None,
+        )
+
+        parser.add_argument(
+            "--overpass-timeout",
+            metavar="time",
+            type=int,
+            help="Timeout for Overpass API queries",
+            default=1000,
         )
 
     if location_merger is not None:
@@ -381,6 +395,15 @@ def main(argv=None):
             default="by_distance",
         )
 
+    if SimpleVisualizer is not None:
+        parser.add_argument(
+            "--visualize-domain",
+            metavar="filename",
+            type=str,
+            help="Visualize domain as configured in config and store in specified file",
+            default=None,
+        )
+
     parser.add_argument("--output", metavar="output filename", type=str, default=None)
 
     start_time = time.time()
@@ -420,6 +443,8 @@ def main(argv=None):
                 output_filename,
                 query_windturbine=True,
                 query_windfarm=True,
+                query_timeout=args.overpass_timeout,
+                query_date=args.situation_date,
                 overpass_url=overpass_url,
             )
         else:
@@ -500,6 +525,18 @@ def main(argv=None):
             )
         else:
             logger.warning("Loading converter failed; please install optional packages.")
+
+    elif hasattr(args, "visualize_domain") and args.visualize_domain:
+        print("Run domain visualizer")
+        config = load_config_from_file(args.config_file)
+
+        if args.domain_file is not None:
+            config["subsetting"]["method"] = "domain"
+            config["subsetting"]["domain"]["file"] = args.domain_file
+
+        visualizer = SimpleVisualizer(config)
+        visualizer.create_map_plot([], args.visualize_domain)
+        print(f"Created map visualization: {args.visualize_domain}")
 
     else:
         print("Run json2tab; default mode")

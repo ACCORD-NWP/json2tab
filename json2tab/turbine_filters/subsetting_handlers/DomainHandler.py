@@ -2,11 +2,8 @@
 
 from typing import Optional
 
-import numpy as np
 import tomli as toml
 from pyproj import CRS, Transformer
-
-from ...DomainConfig import DomainConfig
 
 
 class DomainHandler:
@@ -68,8 +65,15 @@ class DomainHandler:
         return self._extent
 
     def get_bounds(self):
-        """Get domain bounds based on center coordinates and grid specifications."""
-        return DomainConfig.from_config(self.config).get_bounds()
+        """Returns domain extent in projected coordinates."""
+        xmin, ymin, xmax, ymax = self.extent
+
+        inv_transformer = Transformer.from_crs(
+            self.projection, "EPSG:4326", always_xy=True
+        )
+        xlon_min, ylon_min = inv_transformer.transform(xmin, ymin)
+        xlon_max, ylon_max = inv_transformer.transform(xmax, ymax)
+        return xlon_min, ylon_min, xlon_max, ylon_max
 
     def point_in_domain(
         self, lon: float, lat: float, country: Optional[str] = None
@@ -98,51 +102,6 @@ class DomainHandler:
     def display_name(self):
         """Gets a display name for readable subsetting filtering."""
         return f"domain: {self.config.get('name', 'unnamed_domain')}"
-
-    def get_domain_points(self, resolution: int = 100) -> tuple:
-        """Get points defining domain boundary in lat/lon.
-
-        Args:
-            resolution: Number of points per side
-
-        Returns:
-            tuple: Lists of lons, lats defining domain boundary
-        """
-        # Get inverse transformer
-        inv_transformer = Transformer.from_crs(
-            self.projection, "EPSG:4326", always_xy=True
-        )
-
-        # Get extent
-        xmin, ymin, xmax, ymax = self.extent
-
-        # Create arrays of points along boundary
-        np.linspace(0, 1, resolution)
-
-        # Create boundary points in projected coordinates
-        x_points = []
-        y_points = []
-
-        # Bottom edge
-        x_points.extend(np.linspace(xmin, xmax, resolution))
-        y_points.extend([ymin] * resolution)
-
-        # Right edge
-        x_points.extend([xmax] * resolution)
-        y_points.extend(np.linspace(ymin, ymax, resolution))
-
-        # Top edge
-        x_points.extend(np.linspace(xmax, xmin, resolution))
-        y_points.extend([ymax] * resolution)
-
-        # Left edge
-        x_points.extend([xmin] * resolution)
-        y_points.extend(np.linspace(ymax, ymin, resolution))
-
-        # Transform back to lat/lon
-        lons, lats = inv_transformer.transform(x_points, y_points)
-
-        return lons, lats
 
 
 def filter_points_by_domain(points, domain_handler):

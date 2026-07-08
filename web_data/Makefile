@@ -182,7 +182,7 @@ osm/$(OSM_TODAY_FILE):
 	@echo """=== OpenStreetMap ==="
 	@mkdir -p osm
 	@rm -f osm/$(OSM_REQ_OUTPUT_FILE)
-	json2tab --debug=3 --fetch-osm-data "osm/$(OSM_TODAY_FILE)" --overpass-url $(OVERPASS_API_URL)
+	json2tab --debug=3 --fetch-osm-data "osm/$(OSM_TODAY_FILE)" --overpass-url $(OVERPASS_API_URL) --overpass-timeout 1000
 
 
 

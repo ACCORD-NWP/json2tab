@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+from datetime import datetime
 
 try:
     import requests
@@ -33,6 +34,8 @@ def osm_data_fetcher(
     input_filename: Optional[str] = None,
     query_windturbine: Optional[bool] = True,
     query_windfarm: Optional[bool] = True,
+    query_timeout: Optional[int] = None,
+    query_date: Optional[datetime] = None,
     source_label: Optional[str] = None,
     overpass_url: Optional[str] = None,
 ) -> pd.DataFrame:
@@ -44,6 +47,8 @@ def osm_data_fetcher(
                                OverpassAPI call (i.e. use local/cached OSM data)
         query_windturbine (bool): Query wind_turbine data from OSM (default: True)
         query_windfarm (bool):    Query wind_farm data from OSM (default: True)
+        query_timeout (int):   Timeout for query
+        query_date (date):     Date for query
         source_label (str):    Label for source of osm request
         overpass_url (str):    Url used for the overpass API call, some public
                                Overpass API instances can be found on
@@ -58,6 +63,13 @@ def osm_data_fetcher(
 
     if not overpass_url:
         overpass_url = "https://overpass-api.de/api/interpreter"
+
+    VERIFY_FLAG = "?verify=false"
+    if overpass_url.endswith(VERIFY_FLAG):
+        ssl_verify = False
+        overpass_url = overpass_url[0 : -len(VERIFY_FLAG)]
+    else:
+        ssl_verify = None
 
     logger.debug(f"input filename: {input_filename}")
     logger.debug(f"output filename: {output_filename}")
@@ -97,7 +109,10 @@ def osm_data_fetcher(
 
             # Overpass QL query for wind turbines and windfarms
             overpass_query = build_query(
-                windturbine=query_windturbine, windfarm=query_windfarm
+                windturbine=query_windturbine,
+                windfarm=query_windfarm,
+                timeout=query_timeout,
+                requested_date=query_date,
             )
             logger.debug(f"Using overpass query: \n===\n{overpass_query}\n===\n")
 
@@ -105,7 +120,9 @@ def osm_data_fetcher(
 
             if requests is not None:
                 start_time = time.time()
-                response = requests.get(overpass_url, params={"data": overpass_query})
+                response = requests.get(
+                    overpass_url, params={"data": overpass_query}, verify=ssl_verify
+                )
                 logger.info(
                     f"Got response after {time.time() - start_time} seconds: "
                     f"Status {response.status_code} ({response.reason})."

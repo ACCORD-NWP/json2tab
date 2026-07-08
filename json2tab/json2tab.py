@@ -63,6 +63,21 @@ def process_macros(filename: str, config, geo_filter=None) -> str:
     return output
 
 
+def load_config_from_file(config_path: str):
+    """Loads config from file."""
+    # Load configuration
+    logger.debug(f"config_path = {config_path}")
+    if not Path(config_path).exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+
+    with open(config_path) as file:
+        config = yaml.safe_load(file)
+
+    logger.debug(f"config = {config}")
+
+    return config
+
+
 def json2tab(
     config_path: str = "config.yaml",
     turbine_databases: Optional[List[str]] = None,
@@ -78,15 +93,7 @@ def json2tab(
 
     Wrapper around WindTurbineLocationProcessor(Visualizer) to inject custom paths.
     """
-    # Load configuration
-    logger.debug(f"config_path = {config_path}")
-    if not Path(config_path).exists():
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
-
-    with open(config_path) as file:
-        config = yaml.safe_load(file)
-
-    logger.debug(f"config = {config}")
+    config = load_config_from_file(config_path)
 
     # Override custom arguments
     if turbine_databases is not None:

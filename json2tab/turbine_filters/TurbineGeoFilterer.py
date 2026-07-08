@@ -5,10 +5,9 @@ from typing import Any, Dict
 import pandas as pd
 
 from ..logs import logger
-from ..turbine_filters.subsetting_handlers.BoundingBoxHandler import BoundingBoxHandler
-from ..turbine_filters.subsetting_handlers.CountryHandler import CountryHandler
-from ..turbine_filters.subsetting_handlers.DomainHandler import DomainHandler
-from ..turbine_filters.subsetting_handlers.TrueHandler import TrueHandler
+from ..turbine_filters.subsetting_handlers.parse_subsetting_handler import (
+    parse_subsetting_handler,
+)
 
 
 class TurbineGeoFilterer:
@@ -20,27 +19,10 @@ class TurbineGeoFilterer:
         Args:
             subsetting_config (dict): config dict specifying subsetting section
         """
-        # Validate spatial subsetting configuration
-        self.method = subsetting_config["method"]
-        if self.method not in subsetting_config:
-            raise ValueError(f"{self.method} configuration missing")
-
         self.config = subsetting_config
+        self.method = subsetting_config["method"]
 
-        if self.method == "domain":
-            self.subsetting_handler = DomainHandler(self.config["domain"])
-        elif self.method == "bbox":
-            self.subsetting_handler = BoundingBoxHandler(self.config["bbox"])
-        elif self.method == "country":
-            self.subsetting_handler = CountryHandler(self.config["country"])
-        elif self.method == "true":
-            self.subsetting_handler = TrueHandler()
-        else:
-            logger.error(
-                f"Subsetting method must be either 'bbox, 'country' or 'domain', "
-                f"found method = {self.method}."
-            )
-            self.subsetting_handler = None
+        self.subsetting_handler = parse_subsetting_handler(subsetting_config)
 
     def apply(self, data: pd.DataFrame) -> pd.DataFrame:
         """Filter turbine locations with domain awareness.

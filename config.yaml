@@ -108,34 +108,3 @@ warnings:
   no_turbine_matched: false
   line_is_removed: false
 
-# Visualization settings
-visualization:
-  # Plot style: "regional" or "domain" or "both"
-  style: "both"
-  
-  # Figure settings
-  figure:
-    width: 12
-    height: 8
-    dpi: 300
-    
-  # Regional plot settings
-  regional:
-    show_rivers: true
-    rivers_color: "blue"
-    land_color: "lightgray"
-    coastline_color: "black"
-    border_style: ":"
-    border_color: "black"
-    turbine_color: "red"
-    turbine_size: 5
-    
-  # Domain plot settings
-  domain:
-    land_color: "lightgray"
-    ocean_color: "lightblue"
-    coastline_color: "black"
-    border_style: "-"
-    turbine_color: "red"
-    turbine_size: 5
-    show_dotted_bounds: true

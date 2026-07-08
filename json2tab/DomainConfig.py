@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import tomli as toml
 
@@ -97,24 +97,3 @@ class DomainConfig:
             domain = DomainConfig.from_dict(domain_config)
 
         return domain
-
-    def get_bounds(self) -> Tuple[float, float, float, float]:
-        """Calculate domain bounds based on center coordinates and grid specifications.
-
-        Returns:
-            Tuple[float, float, float, float]: min_lon, min_lat, max_lon, max_lat
-        """
-        # Convert grid distances to degrees (approximate)
-        dx_deg = self.xdx / 111000  # 1 degree app 111 km
-        dy_deg = self.xdy / 111000
-
-        # Calculate extents
-        half_width = (self.nimax * dx_deg) / 2
-        half_height = (self.njmax * dy_deg) / 2
-
-        return (
-            self.xloncen - half_width,
-            self.xlatcen - half_height,
-            self.xloncen + half_width,
-            self.xlatcen + half_height,
-        )
