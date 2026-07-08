@@ -10,7 +10,7 @@ TODAY_STAMP:=$(shell date +%Y%m%d)
 compress:
 	@echo "=== COMPRESS DATA TO TAR FILE ==="
 	rm -f static_data_archive_$(TODAY_STAMP).tar.gz
-	tar --exclude Makefile --exclude .gitignore --exclude *.tgz --exclude turbine_database+gened_ct_curves.tar.xz --exclude "worldmap/eez/EEZ_land_union_v4_202410.zip"  --exclude "worldmap/country_borders/World Bank Official Boundaries - Admin *.zip" -czvf static_data_archive_$(TODAY_STAMP).tar.gz * 
+	tar --exclude Makefile --exclude .gitignore --exclude *.tgz --exclude "worldmap/eez/EEZ_land_union_v4_202410.zip"  --exclude "worldmap/country_borders/World Bank Official Boundaries - Admin *.zip" -czvf static_data_archive_$(TODAY_STAMP).tar.gz * 
 
 extract:
 	@echo "=== EXTRACT DATA FROM TAR FILE ==="
@@ -19,9 +19,8 @@ extract:
 
 turbine_database: turbine_database+gened_ct_curves.json
 
-turbine_database+gened_ct_curves.json: turbine_database+gened_ct_curves.tar.xz
-	tar xf turbine_database+gened_ct_curves.tar.xz
-	@touch turbine_database+gened_ct_curves.json
+turbine_database+gened_ct_curves.json:
+	wget --prefer-family=IPv4 -O turbine_database+gened_ct_curves.json "https://drive.usercontent.google.com/download?export=download&id=19We1qP3inHrx3D_tbb6fpn0nJOEI_n97&confirm=t" --content-disposition
 
 worldmap: worldmap/country_borders/WB_GAD_ADM0.shp worldmap/eez
 

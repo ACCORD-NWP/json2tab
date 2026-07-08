@@ -38,6 +38,7 @@ def osm_data_fetcher(
     query_date: Optional[datetime] = None,
     source_label: Optional[str] = None,
     overpass_url: Optional[str] = None,
+    overpass_dump_file: Optional[str] = None,
 ) -> pd.DataFrame:
     """OpenStreetMap wind turbine location data fetcher.
 
@@ -53,6 +54,7 @@ def osm_data_fetcher(
         overpass_url (str):    Url used for the overpass API call, some public
                                Overpass API instances can be found on
                                https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances
+        overpass_dump_file (str): Dump file to write overpass output to
 
     Returns:
         pandas.DataFrame with windturbine location data
@@ -76,11 +78,12 @@ def osm_data_fetcher(
 
     output_filename_base = os.path.splitext(output_filename)[0]
 
-    overpass_dump_file = (
-        f"{output_filename_base}.overpass_output_"
-        f"windturbine={str(query_windturbine).lower()}_"
-        f"windfarm={str(query_windfarm).lower()}.json"
-    )
+    if not overpass_dump_file:
+        overpass_dump_file = (
+            f"{output_filename_base}.overpass_output_"
+            f"windturbine={str(query_windturbine).lower()}_"
+            f"windfarm={str(query_windfarm).lower()}.json"
+        )
 
     output_filename_turbine = f"{output_filename_base}.turbines.csv"
     output_filename_windfarm = f"{output_filename_base}.windfarms.csv"
@@ -89,23 +92,23 @@ def osm_data_fetcher(
         logger.info("Found existing output file; just reload it.")
         data = read_locationdata_as_dataframe(output_filename)
     else:
-        logger.debug("Output file not found; collect and process data for it.")
+        logger.info("Output file not found; collect and process data for it.")
         data = None
 
         if input_filename is not None and os.path.exists(input_filename):
-            logger.debug(f"Process inputfile '{input_filename}' as Overpass API results")
+            logger.info(f"Process inputfile '{input_filename}' as Overpass API results")
             with open(input_filename, "r") as input_file:
                 data = json.load(input_file)
 
         if data is None and os.path.exists(overpass_dump_file):
-            logger.debug(
+            logger.info(
                 f"Process dumpfile '{overpass_dump_file}' as Overpass API results"
             )
             with open(overpass_dump_file, "r") as input_file:
                 data = json.load(input_file)
 
         if not data:
-            logger.debug(f"Using overpass API url: '{overpass_url}'")
+            logger.info(f"Using overpass API url: '{overpass_url}'")
 
             # Overpass QL query for wind turbines and windfarms
             overpass_query = build_query(
@@ -114,7 +117,7 @@ def osm_data_fetcher(
                 timeout=query_timeout,
                 requested_date=query_date,
             )
-            logger.debug(f"Using overpass query: \n===\n{overpass_query}\n===\n")
+            logger.info(f"Using overpass query: \n===\n{overpass_query}\n===\n")
 
             print("Executing request to fetch OSM data...")
 
@@ -139,9 +142,7 @@ def osm_data_fetcher(
                 # Dump overpass api response data to file
                 with open(overpass_dump_file, "w") as dump_file:
                     json.dump(data, dump_file, indent=2)
-                    logger.debug(
-                        f"Dumped overpass query output to '{overpass_dump_file}'"
-                    )
+                    logger.info(f"Dumped overpass query output to '{overpass_dump_file}'")
 
             else:
                 print(
@@ -468,7 +469,6 @@ def process_wf_info(windfarm, element, elements):
     if mapped_turbines != n_turbines:
         # Add location for this windfarm
         windfarm["geometry"] = get_shape_from_element(element, elements)
-        logger.debug(f"shape = {windfarm['geometry']}")
 
     return windfarm
 

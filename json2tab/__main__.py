@@ -163,7 +163,7 @@ def main(argv=None):
         metavar="level",
         type=int,
         help="verbosity level (0...3)",
-        default=1,
+        default=2,
     )
 
     parser.add_argument(
@@ -201,6 +201,14 @@ def main(argv=None):
             type=int,
             help="Timeout for Overpass API queries",
             default=1000,
+        )
+
+        parser.add_argument(
+            "--overpass-dump",
+            metavar="file",
+            type=str,
+            help="File to dump overpass output to",
+            default=None,
         )
 
     if location_merger is not None:
@@ -438,6 +446,7 @@ def main(argv=None):
     elif hasattr(args, "fetch_osm_data") and args.fetch_osm_data:
         if osm_data_fetcher is not None:
             overpass_url = args.overpass_url if hasattr(args, "overpass_url") else None
+            dump_file = args.overpass_dump if hasattr(args, "overpass_dump") else None
             output_filename = args.fetch_osm_data
             osm_data_fetcher(
                 output_filename,
@@ -446,6 +455,7 @@ def main(argv=None):
                 query_timeout=args.overpass_timeout,
                 query_date=args.situation_date,
                 overpass_url=overpass_url,
+                overpass_dump_file=dump_file,
             )
         else:
             logger.warning(

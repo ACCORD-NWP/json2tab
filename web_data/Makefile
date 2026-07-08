@@ -1,3 +1,7 @@
+# Optional load envirement variables from .env-file to define OVERPASS_API_URL
+# Compy the file sample.env to .env and provide your envirement configuration
+-include .env
+
 TODAY_STAMP:=$(shell date +%Y%m%d)
 TODAY_YEAR:=$(shell date +%Y)
 TODAY_QUARTER:=$(shell date +%q)
@@ -135,6 +139,8 @@ united_kingdom: $(UK_HTML_FILE)
 	cd united_kingdom && wget --prefer-family=IPv4 "$(shell grep -o 'https://.*.xlsx' $(UK_HTML_FILE) | head -n 1)"
 #	Delete html-file to contunue fetching RERD-page to get new data when available
 	@if [ -f united_kingdom/REPD_publication_Q$(QUERY_QUARTER)_$(QUERY_YEAR).xlsx ]; then mv united_kingdom/REPD_publication_Q$(QUERY_QUARTER)_$(QUERY_YEAR).xlsx united_kingdom/REPD_publication_$(QUERY_YEAR)_Q$(QUERY_QUARTER).xlsx; else rm $(UK_HTML_FILE); fi
+#   Delete all duplicated downloaded files
+	@rm -f united_kingdom/REPD_publication_Q*_*.xlsx.*
 
 italy:
 	@echo """=== ITALY ==="
@@ -168,21 +174,21 @@ finland:
 
 
 # OpenStreetMap data handling
+OVERPASS_API_URL?=https://overpass-api.de/api/interpreter
+OVERPASS_API_LABEL?=global
+OVERPASS_API_TIMEOUT?=1000
+
 OSM_BASENAME:=windturbine_windfarm_locations_osm
 OSM_TODAY_FILE_BASE:=$(OSM_BASENAME)_$(TODAY_STAMP)
 OSM_TODAY_FILE:=$(OSM_TODAY_FILE_BASE).csv
-OSM_REQ_OUTPUT_FILE:=$(OSM_TODAY_FILE_BASE).overpass_output_windturbine=true_windfarm=true.json
-
-#OVERPASS_API_URL:=https://overpass-api.de/api/interpreter
-OVERPASS_API_URL:=https://overpass.private.coffee/api/interpreter
-#OVERPASS_API_URL:=https://localhost/api/interpreter
+OSM_REQ_OUTPUT_FILE:=$(OSM_TODAY_FILE_BASE).overpass_output_$(OVERPASS_API_LABEL)_windturbine=true_windfarm=true.json
 
 osm: osm/$(OSM_TODAY_FILE)
 osm/$(OSM_TODAY_FILE):
 	@echo """=== OpenStreetMap ==="
 	@mkdir -p osm
 	@rm -f osm/$(OSM_REQ_OUTPUT_FILE)
-	json2tab --debug=3 --fetch-osm-data "osm/$(OSM_TODAY_FILE)" --overpass-url $(OVERPASS_API_URL) --overpass-timeout 1000
+	json2tab --fetch-osm-data "osm/$(OSM_TODAY_FILE)" --overpass-url $(OVERPASS_API_URL) --overpass-timeout $(OVERPASS_API_TIMEOUT) --overpass-dump "osm/$(OSM_REQ_OUTPUT_FILE)"
 
 
 
